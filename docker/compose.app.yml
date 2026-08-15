@@ -1,0 +1,37 @@
+networks:
+  cdc-network:
+    external: true
+
+services:
+  bff:
+    build:
+      context: ../apps/bff
+      dockerfile: Dockerfile
+    container_name: cdc-bff
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_USER: postgres
+      PG_PASSWORD: postgres
+      PG_DATABASE: cdc_source
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: cdc_source
+      KAFKA_CONNECT_URL: http://kafka-connect:8083
+      KAFKA_BROKERS: kafka:9092
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      SCHEMA_REGISTRY_URL: http://schema-registry:8080
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
