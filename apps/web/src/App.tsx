@@ -5,10 +5,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Connectors } from "./pages/Connectors";
 import { ConnectorDetail } from "./pages/ConnectorDetail";
 import { NewConnector } from "./pages/NewConnector";
-
-function ObservabilityPage() {
-  return <p className="text-gray-500">Observability — coming soon (Task 11)</p>;
-}
+import { Observability } from "./pages/Observability";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,7 +23,7 @@ export default function App() {
             <Route path="/connectors" element={<Connectors />} />
             <Route path="/connectors/new" element={<NewConnector />} />
             <Route path="/connectors/:name" element={<ConnectorDetail />} />
-            <Route path="/observability" element={<ObservabilityPage />} />
+            <Route path="/observability" element={<Observability />} />
           </Route>
         </Routes>
       </BrowserRouter>

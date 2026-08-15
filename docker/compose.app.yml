@@ -35,3 +35,16 @@ services:
       retries: 5
     networks:
       - cdc-network
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    container_name: cdc-web
+    ports:
+      - "5173:5173"
+    depends_on:
+      bff:
+        condition: service_healthy
+    networks:
+      - cdc-network
