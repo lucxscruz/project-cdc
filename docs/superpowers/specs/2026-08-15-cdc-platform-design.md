@@ -91,7 +91,7 @@ Todos os servicos entram na rede `cdc-network`. O `compose.infra.yml` cria a red
 | kafka | apache/kafka:3.7 | 9092 | Modo KRaft (KAFKA_PROCESS_ROLES=broker,controller), JMX Exporter na :9404 |
 | schema-registry | apicurio/apicurio-registry:2 | 8080 | Storage in-memory (suficiente para estudo) |
 | kafka-connect | debezium/connect:2.5 | 8083 | Debezium connectors built-in + S3 Sink Connector adicionado, JMX Exporter na :9405 |
-| minio | minio/minio | 9000 (API) / 9001 (Console) | Bucket `cdc-data` criado via init script |
+| minio | minio/minio | 9000 (API) / 9001 (Console) | Bucket `raw` criado via init script |
 
 ### 3.3 Servicos do compose.observability.yml
 
@@ -138,14 +138,16 @@ MySQL      ──→ Debezium Source Connector ──→ Kafka Topics ──→ 
 - Debezium configurado com `key.converter` e `value.converter` apontando para Apicurio
 - Converter: `io.apicurio.registry.utils.converter.ExtJsonConverter` (JSON com schema no registry)
 - Schemas versionados automaticamente conforme DDL changes
+- Modo de compatibilidade: **BACKWARD** (padrao da industria — consumer novo le dados antigos)
+- Convencao: `id` (PK) nunca e removido das tabelas
 
 ### 4.3 Sink Connector (MinIO)
 
 - S3 Sink Connector configurado com endpoint MinIO (`http://minio:9000`)
 - Formato: JSON (JsonConverter)
-- Particionamento: `TimeBasedPartitioner` (hourly) — organiza arquivos por hora
-- Bucket: `cdc-data`
-- Path: `topics/{topic}/{year}/{month}/{day}/{hour}/`
+- Bucket: `raw`
+- Path: `{database}.{table}/{ds}/` (ex: `mydb_postgres.public.customers/2026-08-15/`)
+- Particionamento diario por `ds` (YYYY-MM-DD) — facilita processamento posterior por tabela e data
 - Flush: a cada 100 registros ou 60 segundos (o que vier primeiro)
 
 ### 4.4 Dados de Exemplo
@@ -259,11 +261,6 @@ Endpoint Prometheus via `prom-client`:
 **Observabilidade:**
 - Embed de dashboards Grafana via iframe
 - Fallback: metricas simplificadas diretas do BFF
-
-**Storage (MinIO):**
-- Listagem de buckets e objetos sincronizados
-- Preview de arquivos JSON
-- Contagem de objetos por tabela/topico
 
 ### 6.2 Comunicacao
 
