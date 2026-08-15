@@ -1,0 +1,72 @@
+{
+  "dashboard": {
+    "title": "Infrastructure",
+    "uid": "infrastructure",
+    "tags": ["infra"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Kafka Messages In (rate/min)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(kafka_server_brokertopicmetrics_messagesin_total[1m])",
+            "legendFormat": "messages/min"
+          }
+        ]
+      },
+      {
+        "title": "Kafka Bytes In (rate/min)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(kafka_server_brokertopicmetrics_bytesin_total[1m])",
+            "legendFormat": "bytes/min"
+          }
+        ]
+      },
+      {
+        "title": "MinIO Storage Used",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 8, "x": 0, "y": 8 },
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "minio_cluster_usage_total_bytes",
+            "legendFormat": "total bytes"
+          }
+        ]
+      },
+      {
+        "title": "MinIO Objects Count",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 8, "x": 8, "y": 8 },
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "minio_cluster_usage_object_total",
+            "legendFormat": "objects"
+          }
+        ]
+      },
+      {
+        "title": "Kafka Connect Tasks Running",
+        "type": "stat",
+        "gridPos": { "h": 4, "w": 8, "x": 16, "y": 8 },
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "kafka_connect_connector_task_status",
+            "legendFormat": "{{connector}}-{{task}}"
+          }
+        ]
+      }
+    ],
+    "time": { "from": "now-1h", "to": "now" },
+    "refresh": "30s"
+  }
+}

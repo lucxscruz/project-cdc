@@ -1,0 +1,67 @@
+{
+  "dashboard": {
+    "title": "Logs Explorer",
+    "uid": "logs-explorer",
+    "tags": ["logs"],
+    "timezone": "browser",
+    "templating": {
+      "list": [
+        {
+          "name": "service",
+          "type": "query",
+          "datasource": "Loki",
+          "query": "label_values(compose_service)",
+          "refresh": 2,
+          "current": { "text": "All", "value": "$__all" },
+          "includeAll": true
+        },
+        {
+          "name": "level",
+          "type": "custom",
+          "options": [
+            { "text": "All", "value": "", "selected": true },
+            { "text": "ERROR", "value": "ERROR" },
+            { "text": "WARN", "value": "WARN" },
+            { "text": "INFO", "value": "INFO" }
+          ],
+          "current": { "text": "All", "value": "" }
+        }
+      ]
+    },
+    "panels": [
+      {
+        "title": "Log Volume",
+        "type": "timeseries",
+        "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "sum(count_over_time({compose_service=~\"$service\"} |~ \"$level\" [1m])) by (compose_service)",
+            "legendFormat": "{{compose_service}}"
+          }
+        ]
+      },
+      {
+        "title": "Log Lines",
+        "type": "logs",
+        "gridPos": { "h": 16, "w": 24, "x": 0, "y": 6 },
+        "datasource": "Loki",
+        "targets": [
+          {
+            "expr": "{compose_service=~\"$service\"} |~ \"$level\""
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "showCommonLabels": false,
+          "wrapLogMessage": true,
+          "enableLogDetails": true,
+          "sortOrder": "Descending"
+        }
+      }
+    ],
+    "time": { "from": "now-1h", "to": "now" },
+    "refresh": "30s"
+  }
+}

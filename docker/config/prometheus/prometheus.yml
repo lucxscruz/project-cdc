@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "kafka"
+    static_configs:
+      - targets: ["kafka:9404"]
+        labels:
+          service: "kafka"
+
+  - job_name: "kafka-connect"
+    static_configs:
+      - targets: ["kafka-connect:9405"]
+        labels:
+          service: "kafka-connect"
+
+  - job_name: "minio"
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ["minio:9000"]
+        labels:
+          service: "minio"
+
+  - job_name: "bff"
+    static_configs:
+      - targets: ["bff:3001"]
+        labels:
+          service: "bff"
+    metrics_path: /metrics
