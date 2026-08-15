@@ -16,12 +16,11 @@ Plataforma de CDC containerizada que captura mudancas em bancos PostgreSQL e MyS
 |---|---|
 | Bancos fonte | PostgreSQL 16, MySQL 8 |
 | CDC | Debezium 2.5 (pgoutput + binlog) |
-| Streaming | Apache Kafka 3.7 (modo KRaft, sem Zookeeper) |
-| Schema | Apicurio Registry 2 |
+| Streaming | Redpanda (broker Kafka-compativel + Schema Registry integrado) |
 | Sink | Kafka Connect S3 Sink Connector → MinIO (formato JSON) |
 | Aplicacao | React (Vite) + Node.js (Fastify) como BFF |
 | Observabilidade | Prometheus, Grafana, Loki, Promtail |
-| Infra | Docker Compose separado por camada |
+| Infra | Docker Compose unificado (`docker/docker-compose.yml`) |
 
 ### Principios
 
@@ -36,9 +35,12 @@ Plataforma de CDC containerizada que captura mudancas em bancos PostgreSQL e MyS
 ```
 pdi/
 ├── docker/
-│   ├── compose.infra.yml          # Kafka, Postgres, MySQL, Debezium, Connect, MinIO, Apicurio
-│   ├── compose.app.yml            # Node BFF + React
-│   ├── compose.observability.yml  # Prometheus, Grafana, Loki, Promtail
+│   ├── docker-compose.yml         # Compose unificado (arquivo principal)
+│   ├── compose.infra.yml          # Legado — nao e o arquivo principal
+│   ├── compose.app.yml            # Legado — nao e o arquivo principal
+│   ├── compose.observability.yml  # Legado — nao e o arquivo principal
+│   ├── kafka-connect/
+│   │   └── Dockerfile             # Imagem customizada com S3 Sink Connector pre-instalado
 │   └── config/
 │       ├── kafka-connect/         # Worker properties, JMX exporter config
 │       ├── prometheus/            # prometheus.yml (scrape targets)
@@ -60,9 +62,12 @@ pdi/
 │       ├── src/
 │       ├── Dockerfile
 │       └── package.json
+├── connectors/                    # JSONs de configuracao dos connectors
 ├── docs/
 │   └── superpowers/
 │       └── specs/
+├── start.sh                       # Sobe tudo via docker-compose.yml unificado
+├── stop.sh                        # Para tudo
 └── README.md
 ```
 
@@ -72,26 +77,22 @@ pdi/
 
 ### 3.1 Organizacao dos Compose Files
 
-Tres compose files separados por camada, compartilhando uma rede Docker (`cdc-network`):
+Um unico compose file unificado (`docker/docker-compose.yml`) contem todos os servicos, compartilhando a rede Docker `cdc-network`.
 
-- **`compose.infra.yml`** — Pipeline CDC completa
-- **`compose.app.yml`** — Painel de gestao (BFF + Web)
-- **`compose.observability.yml`** — Metricas e logs
+Os arquivos legados (`compose.infra.yml`, `compose.app.yml`, `compose.observability.yml`) ainda existem no repositorio mas nao sao o ponto de entrada principal.
 
-Todos os servicos entram na rede `cdc-network`. O `compose.infra.yml` cria a rede; os demais a referenciam como `external: true`.
+Os scripts `start.sh` e `stop.sh` na raiz do projeto operam sobre o compose unificado.
 
-**Ordem de inicializacao:** infra → observability → app
+### 3.2 Servicos do docker-compose.yml (infraestrutura CDC)
 
-### 3.2 Servicos do compose.infra.yml
-
-| Servico | Imagem | Porta | Configuracao |
+| Servico | Imagem | Porta (host:container) | Configuracao |
 |---|---|---|---|
-| postgres | postgres:16 | 5432 | `wal_level=logical`, usuario de replicacao, init.sql com tabelas exemplo |
-| mysql | mysql:8 | 3306 | `binlog_format=ROW`, `binlog_row_image=FULL`, usuario replicacao, init.sql |
-| kafka | apache/kafka:3.7 | 9092 | Modo KRaft (KAFKA_PROCESS_ROLES=broker,controller), JMX Exporter na :9404 |
-| schema-registry | apicurio/apicurio-registry:2 | 8080 | Storage in-memory (suficiente para estudo) |
-| kafka-connect | debezium/connect:2.5 | 8083 | Debezium connectors built-in + S3 Sink Connector adicionado, JMX Exporter na :9405 |
-| minio | minio/minio | 9000 (API) / 9001 (Console) | Bucket `raw` criado via init script |
+| postgres | postgres:16 | 5432:5432 | `wal_level=logical`, usuario de replicacao, init.sql com tabelas exemplo |
+| mysql | mysql:8 | 3307:3306 | `binlog_format=ROW`, `binlog_row_image=FULL`, usuario replicacao, init.sql |
+| redpanda | redpandadata/redpanda | 9092:9092, 9644:9644, 18081:8081, 18082:8082 | Substitui Kafka broker + Apicurio Schema Registry em um unico container |
+| redpanda-console | redpandadata/console | 8080:8080 | UI web para topicos, consumer groups, schemas |
+| kafka-connect | Build local (docker/kafka-connect/Dockerfile) | 8083:8083 | Imagem customizada sobre debezium/connect:2.5 com S3 Sink Connector pre-instalado via JARs copiados |
+| minio | minio/minio | 19000:9000 (API) / 19001:9001 (Console) | Bucket `raw` criado via init script |
 
 ### 3.3 Servicos do compose.observability.yml
 
@@ -114,11 +115,11 @@ Todos os servicos entram na rede `cdc-network`. O `compose.infra.yml` cria a red
 ## 4. Pipeline CDC — Fluxo de Dados
 
 ```
-PostgreSQL ──→ Debezium Source Connector ──→ Kafka Topics ──→ S3 Sink Connector ──→ MinIO
-MySQL      ──→ Debezium Source Connector ──→ Kafka Topics ──→ S3 Sink Connector ──→ MinIO
-                                                 ↓
-                                         Apicurio Schema Registry
+PostgreSQL ──→ Debezium Source Connector ──→ Redpanda Topics ──→ S3 Sink Connector ──→ MinIO
+MySQL      ──→ Debezium Source Connector ──→ Redpanda Topics ──→ S3 Sink Connector ──→ MinIO
 ```
+
+Redpanda e Kafka-compativel: Kafka Connect e os connectors Debezium se comunicam com Redpanda usando o protocolo Kafka padrao, sem alteracoes de configuracao no lado dos connectors.
 
 ### 4.1 Source Connectors (Debezium)
 
@@ -133,17 +134,17 @@ MySQL      ──→ Debezium Source Connector ──→ Kafka Topics ──→ 
 - Usuario com `REPLICATION SLAVE` e `REPLICATION CLIENT`
 - Mesmo padrao de topicos
 
-### 4.2 Schema Registry
+### 4.2 Converters
 
-- Debezium configurado com `key.converter` e `value.converter` apontando para Apicurio
-- Converter: `io.apicurio.registry.utils.converter.ExtJsonConverter` (JSON com schema no registry)
-- Schemas versionados automaticamente conforme DDL changes
-- Modo de compatibilidade: **BACKWARD** (padrao da industria — consumer novo le dados antigos)
+- Converter utilizado: `org.apache.kafka.connect.json.JsonConverter` (JsonConverter padrao do Kafka Connect)
+- O `io.apicurio.registry.utils.converter.ExtJsonConverter` foi descartado: a imagem `debezium/connect:2.5` nao inclui os JARs do Apicurio converter, e Redpanda ja fornece Schema Registry integrado se necessario no futuro
+- Mensagens trafegam em JSON simples, sem schema embedado
 - Convencao: `id` (PK) nunca e removido das tabelas
 
 ### 4.3 Sink Connector (MinIO)
 
-- S3 Sink Connector configurado com endpoint MinIO (`http://minio:9000`)
+- S3 Sink Connector instalado via Dockerfile customizado (`docker/kafka-connect/Dockerfile`) que copia os JARs do plugin pre-baixados para o container
+- Endpoint MinIO configurado como `http://minio:9000` (dentro da rede Docker; a porta do host e 19000)
 - Formato: JSON (JsonConverter)
 - Bucket: `raw`
 - Path: `{database}.{table}/{ds}/` (ex: `mydb_postgres.public.customers/2026-08-15/`)
@@ -217,7 +218,7 @@ O endpoint `/generate` recebe: tipo do template, banco, tabelas selecionadas, e 
 | GET | `/` | Status agregado de todos os servicos |
 | GET | `/:service` | Health check individual |
 
-**Servicos monitorados:** kafka, kafka-connect, postgres, mysql, minio, schema-registry
+**Servicos monitorados:** redpanda, kafka-connect, postgres, mysql, minio
 
 Cada check tenta conexao real (pg: `SELECT 1`, mysql: `SELECT 1`, kafka: metadata request, etc.).
 
@@ -278,12 +279,12 @@ Endpoint Prometheus via `prom-client`:
 
 | Target | Endpoint | Metricas-chave |
 |---|---|---|
-| Kafka | `:9404/metrics` (JMX Exporter) | Messages in/out rate, under-replicated partitions, request latency |
+| Redpanda | `:9644/metrics` | Messages in/out rate, partitions, request latency |
 | Kafka Connect | `:9405/metrics` (JMX Exporter) | Connector status, task count, offset commit latency, error rate |
 | Node BFF | `:3001/metrics` | Request duration, health status, connector status gauges |
-| MinIO | `:9000/minio/v2/metrics/cluster` | Object count, storage used, API requests |
+| MinIO | `:9000/minio/v2/metrics/cluster` (interno) | Object count, storage used, API requests |
 
-O JMX Exporter roda como Java agent nos containers Kafka e Kafka Connect.
+O JMX Exporter roda como Java agent no container Kafka Connect. Redpanda expoe metricas nativamente no endpoint `/metrics`.
 
 ### 7.2 Logs (Loki + Promtail)
 
@@ -321,29 +322,40 @@ O JMX Exporter roda como Java agent nos containers Kafka e Kafka Connect.
 Todos os containers compartilham a rede `cdc-network` (bridge driver).
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        cdc-network                              │
-│                                                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
-│  │ postgres │  │  mysql   │  │  kafka   │  │ kafka-connect │  │
-│  │  :5432   │  │  :3306   │  │  :9092   │  │    :8083      │  │
-│  └──────────┘  └──────────┘  └──────────┘  └───────────────┘  │
-│                                                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│  │  minio   │  │ apicurio │  │   bff    │  │   web    │       │
-│  │:9000/9001│  │  :8080   │  │  :3001   │  │  :5173   │       │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘       │
-│                                                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
-│  │prometheus│  │ grafana  │  │   loki   │  │ promtail │       │
-│  │  :9090   │  │  :3000   │  │  :3100   │  │          │       │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘       │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                              cdc-network                                 │
+│                                                                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────┐  ┌───────────────┐        │
+│  │ postgres │  │  mysql   │  │   redpanda   │  │ kafka-connect │        │
+│  │  :5432   │  │  :3306   │  │  :9092/:9644 │  │    :8083      │        │
+│  └──────────┘  └──────────┘  └──────────────┘  └───────────────┘        │
+│                                                                          │
+│  ┌──────────────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐         │
+│  │ redpanda-console │  │  minio   │  │   bff    │  │   web    │         │
+│  │      :8080       │  │:9000/9001│  │  :3001   │  │  :5173   │         │
+│  └──────────────────┘  └──────────┘  └──────────┘  └──────────┘         │
+│                                                                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐                 │
+│  │prometheus│  │ grafana  │  │   loki   │  │ promtail │                 │
+│  │  :9090   │  │  :3000   │  │  :3100   │  │          │                 │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘                 │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Portas expostas ao host:**
-- Essenciais: web (:5173), bff (:3001), grafana (:3000)
-- Debug/admin: kafka (:9092), minio console (:9001), kafka-connect (:8083), apicurio (:8080), prometheus (:9090)
+**Portas expostas ao host** (algumas diferem para evitar conflitos locais):
+
+| Servico | Porta host | Porta container |
+|---|---|---|
+| Web Panel | 5173 | 5173 |
+| BFF | 3001 | 3001 |
+| Grafana | 3000 | 3000 |
+| Redpanda (Kafka) | 9092 | 9092 |
+| Redpanda Console | 8080 | 8080 |
+| Kafka Connect | 8083 | 8083 |
+| Prometheus | 9090 | 9090 |
+| MySQL | 3307 | 3306 |
+| MinIO API | 19000 | 9000 |
+| MinIO Console | 19001 | 9001 |
 
 ---
 
@@ -351,13 +363,15 @@ Todos os containers compartilham a rede `cdc-network` (bridge driver).
 
 | Decisao | Justificativa |
 |---|---|
-| Kafka KRaft (sem Zookeeper) | Menos complexidade, menos containers, futuro do Kafka |
-| Apicurio (nao Confluent) | Open-source sem restricoes de licenca |
+| Redpanda (nao Kafka + Zookeeper/KRaft) | Broker + Schema Registry em um container so; mais simples para estudo, Kafka-compativel |
+| JsonConverter (nao Apicurio ExtJsonConverter) | `debezium/connect:2.5` nao inclui os JARs do Apicurio converter; JsonConverter funciona out-of-the-box |
+| S3 Sink via Dockerfile customizado | Plugin nao incluido na imagem base; JARs copiados no build resolve sem dependencia de internet em runtime |
+| Compose unificado (nao separado por camada) | Simplifica o fluxo de start/stop para o contexto de aprendizado; scripts start.sh/stop.sh encapsulam o comando |
+| Portas host distintas para MySQL/MinIO | Evita conflitos com servicos locais comuns (:3306, :9000/:9001) sem alterar configuracao interna dos containers |
 | Fastify (nao Express) | Mais leve, schema validation nativo, melhor DX |
 | Shadcn/ui (nao MUI/Ant) | Componentes copiados no projeto (sem dependencia), customizaveis |
 | JSON no MinIO (nao Parquet) | Legivel, facil de inspecionar durante aprendizado |
 | Promtail via Docker socket | Sem necessidade de configurar logging driver em cada container |
-| JMX Exporter como Java agent | Padrao do ecossistema para expor metricas JVM ao Prometheus |
 | Um unico Kafka Connect cluster | Source (Debezium) e Sink (S3) no mesmo runtime simplifica a infra |
 
 ---
