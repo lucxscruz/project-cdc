@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.gitignore
+README.md
+vite.config.ts
+tsconfig.json
+tsconfig.app.json
+tsconfig.node.json
+package-lock.json
+npm-debug.log
+.DS_Store
+.env.local
+.env.*.local
