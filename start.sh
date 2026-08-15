@@ -4,18 +4,12 @@ set -e
 cd "$(dirname "$0")/docker"
 
 echo "Starting CDC Platform..."
+docker compose up -d
 
-echo "[1/4] Starting infrastructure..."
-docker compose -f compose.infra.yml up -d
-
-echo "[2/4] Starting observability..."
-docker compose -f compose.observability.yml up -d
-
-echo "[3/4] Starting application..."
-docker compose -f compose.app.yml up -d
-
-echo "[4/4] Registering CDC connectors..."
+echo "Waiting for Kafka Connect..."
 until curl -sf http://localhost:8083/connectors > /dev/null 2>&1; do sleep 3; done
+
+echo "Registering CDC connectors..."
 bash ../docker/connectors/register-all.sh
 
 echo ""

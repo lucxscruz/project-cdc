@@ -1,0 +1,305 @@
+networks:
+  cdc-network:
+    driver: bridge
+    name: cdc-network
+
+services:
+  # ============================================================
+  # DATABASES
+  # ============================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: cdc-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=4", "-c", "max_replication_slots=4"]
+    volumes:
+      - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
+
+  mysql:
+    image: mysql:8
+    container_name: cdc-mysql
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: ["--binlog-format=ROW", "--binlog-row-image=FULL", "--server-id=1", "--log-bin=mysql-bin"]
+    volumes:
+      - ./config/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
+
+  # ============================================================
+  # STREAMING (Redpanda = Kafka broker + Schema Registry)
+  # ============================================================
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: cdc-redpanda
+    ports:
+      - "9092:9092"
+      - "8081:18081"
+      - "18082:28082"
+      - "9644:9644"
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:29092,external://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:29092,external://redpanda:9092
+      - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:28082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:28082
+      - --node-id=0
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health", "--api-urls", "http://localhost:9644"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - cdc-network
+
+  redpanda-console:
+    image: redpandadata/console:v2.7.2
+    container_name: cdc-redpanda-console
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_BROKERS: redpanda:29092
+      KAFKA_SCHEMAREGISTRY_ENABLED: "true"
+      KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
+      REDPANDA_ADMINAPI_ENABLED: "true"
+      REDPANDA_ADMINAPI_URLS: http://redpanda:9644
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - cdc-network
+
+  # ============================================================
+  # CDC (Kafka Connect + Debezium + S3 Sink)
+  # ============================================================
+  kafka-connect:
+    build:
+      context: ./kafka-connect
+      dockerfile: Dockerfile
+    container_name: cdc-kafka-connect
+    ports:
+      - "8083:8083"
+    environment:
+      GROUP_ID: 1
+      BOOTSTRAP_SERVERS: redpanda:29092
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "true"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - cdc-network
+
+  # ============================================================
+  # STORAGE (MinIO)
+  # ============================================================
+  minio:
+    image: minio/minio
+    container_name: cdc-minio
+    ports:
+      - "19000:9000"
+      - "19001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
+
+  minio-init:
+    image: minio/mc
+    container_name: cdc-minio-init
+    entrypoint: /bin/sh
+    command: /init.sh
+    volumes:
+      - ./config/minio/init.sh:/init.sh
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - cdc-network
+
+  # ============================================================
+  # OBSERVABILITY (Prometheus + Grafana + Loki + Promtail)
+  # ============================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cdc-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
+
+  loki:
+    image: grafana/loki:latest
+    container_name: cdc-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./config/loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - cdc-network
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: cdc-promtail
+    volumes:
+      - ./config/promtail/promtail-config.yml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - cdc-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cdc-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
+
+  # ============================================================
+  # APPLICATION (BFF + Web)
+  # ============================================================
+  bff:
+    build:
+      context: ../apps/bff
+      dockerfile: Dockerfile
+    container_name: cdc-bff
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_USER: postgres
+      PG_PASSWORD: postgres
+      PG_DATABASE: cdc_source
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: cdc_source
+      KAFKA_CONNECT_URL: http://kafka-connect:8083
+      KAFKA_BROKERS: redpanda:29092
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3001/metrics').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    networks:
+      - cdc-network
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    container_name: cdc-web
+    ports:
+      - "5173:5173"
+    depends_on:
+      bff:
+        condition: service_healthy
+    networks:
+      - cdc-network
+
+volumes:
+  postgres_data:
+  mysql_data:
+  redpanda_data:
+  minio_data:
+  prometheus_data:
+  loki_data:
+  grafana_data:
