@@ -14,11 +14,9 @@
     "publication.name": "debezium_publication",
     "slot.name": "debezium_slot",
     "snapshot.mode": "initial",
-    "key.converter": "io.apicurio.registry.utils.converter.ExtJsonConverter",
-    "key.converter.apicurio.registry.url": "http://schema-registry:8080/apis/registry/v2",
-    "key.converter.apicurio.registry.auto-register": "true",
-    "value.converter": "io.apicurio.registry.utils.converter.ExtJsonConverter",
-    "value.converter.apicurio.registry.url": "http://schema-registry:8080/apis/registry/v2",
-    "value.converter.apicurio.registry.auto-register": "true"
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "true",
+    "value.converter.schemas.enable": "true"
   }
 }

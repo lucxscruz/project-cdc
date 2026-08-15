@@ -15,11 +15,11 @@
     "locale": "en-US",
     "timezone": "UTC",
     "storage.class": "io.confluent.connect.s3.storage.S3Storage",
-    "key.converter": "io.apicurio.registry.utils.converter.ExtJsonConverter",
-    "key.converter.apicurio.registry.url": "http://schema-registry:8080/apis/registry/v2",
-    "value.converter": "io.apicurio.registry.utils.converter.ExtJsonConverter",
-    "value.converter.apicurio.registry.url": "http://schema-registry:8080/apis/registry/v2",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
     "aws.access.key.id": "minioadmin",
-    "aws.secret.access.key": "minioadmin"
+    "aws.secret.access.key": "minioadmin",
+    "key.converter.schemas.enable": "true",
+    "value.converter.schemas.enable": "true"
   }
 }

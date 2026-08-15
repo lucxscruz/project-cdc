@@ -114,15 +114,14 @@ services:
       CONFIG_STORAGE_REPLICATION_FACTOR: 1
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
-      # Schema Registry (Apicurio)
-      KEY_CONVERTER: io.apicurio.registry.utils.converter.ExtJsonConverter
-      VALUE_CONVERTER: io.apicurio.registry.utils.converter.ExtJsonConverter
-      CONNECT_KEY_CONVERTER_APICURIO_REGISTRY_URL: http://schema-registry:8080/apis/registry/v2
-      CONNECT_VALUE_CONVERTER_APICURIO_REGISTRY_URL: http://schema-registry:8080/apis/registry/v2
-      CONNECT_KEY_CONVERTER_APICURIO_REGISTRY_AUTO_REGISTER: "true"
-      CONNECT_VALUE_CONVERTER_APICURIO_REGISTRY_AUTO_REGISTER: "true"
+      # JSON converter with schemas inline (Apicurio converter not bundled in debezium/connect:2.5)
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "true"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
       # JMX Exporter
-      KAFKA_OPTS: "-javaagent:/opt/jmx-exporter/jmx_prometheus_javaagent.jar=9405:/opt/jmx-exporter/jmx-exporter-config.yml"
+      # JMX Exporter disabled - jar not included in custom image
+      # KAFKA_OPTS: "-javaagent:/opt/jmx-exporter/jmx_prometheus_javaagent.jar=9405:/opt/jmx-exporter/jmx-exporter-config.yml"
     volumes:
       - ./config/kafka-connect/jmx-exporter-config.yml:/opt/jmx-exporter/jmx-exporter-config.yml
     depends_on:
@@ -146,8 +145,8 @@ services:
     image: minio/minio
     container_name: cdc-minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "19000:9000"
+      - "19001:9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
