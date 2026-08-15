@@ -1,0 +1,178 @@
+networks:
+  cdc-network:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cdc-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=4", "-c", "max_replication_slots=4"]
+    volumes:
+      - ./config/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
+
+  mysql:
+    image: mysql:8
+    container_name: cdc-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    command: ["--binlog-format=ROW", "--binlog-row-image=FULL", "--server-id=1", "--log-bin=mysql-bin"]
+    volumes:
+      - ./config/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
+
+  kafka:
+    # apache/kafka:3.7.0 crashes with SIGILL on ARM Mac (JDK 21.0.2 bug in registerNatives).
+    # confluentinc/cp-kafka:7.7.0 is Apache Kafka 3.7.x on Java 17 (works on ARM).
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: cdc-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft settings
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # Listeners
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Cluster
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - cdc-network
+
+  schema-registry:
+    image: apicurio/apicurio-registry:latest
+    container_name: cdc-schema-registry
+    ports:
+      - "8080:8080"
+    environment:
+      REGISTRY_STORAGE_KIND: mem
+      QUARKUS_HTTP_PORT: 8080
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/apis/registry/v2/groups"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
+
+  kafka-connect:
+    image: debezium/connect:2.5
+    container_name: cdc-kafka-connect
+    ports:
+      - "8083:8083"
+      - "9405:9405"
+    environment:
+      GROUP_ID: 1
+      BOOTSTRAP_SERVERS: kafka:9092
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+      CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      STATUS_STORAGE_REPLICATION_FACTOR: 1
+      # Schema Registry (Apicurio)
+      KEY_CONVERTER: io.apicurio.registry.utils.converter.ExtJsonConverter
+      VALUE_CONVERTER: io.apicurio.registry.utils.converter.ExtJsonConverter
+      CONNECT_KEY_CONVERTER_APICURIO_REGISTRY_URL: http://schema-registry:8080/apis/registry/v2
+      CONNECT_VALUE_CONVERTER_APICURIO_REGISTRY_URL: http://schema-registry:8080/apis/registry/v2
+      CONNECT_KEY_CONVERTER_APICURIO_REGISTRY_AUTO_REGISTER: "true"
+      CONNECT_VALUE_CONVERTER_APICURIO_REGISTRY_AUTO_REGISTER: "true"
+      # JMX Exporter
+      KAFKA_OPTS: "-javaagent:/opt/jmx-exporter/jmx_prometheus_javaagent.jar=9405:/opt/jmx-exporter/jmx-exporter-config.yml"
+    volumes:
+      - ./config/kafka-connect/jmx-exporter-config.yml:/opt/jmx-exporter/jmx-exporter-config.yml
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - cdc-network
+
+  minio:
+    image: minio/minio
+    container_name: cdc-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cdc-network
+
+  minio-init:
+    image: minio/mc
+    container_name: cdc-minio-init
+    entrypoint: /bin/sh
+    command: /init.sh
+    volumes:
+      - ./config/minio/init.sh:/init.sh
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - cdc-network
+
+volumes:
+  postgres_data:
+  mysql_data:
+  kafka_data:
+  minio_data:
