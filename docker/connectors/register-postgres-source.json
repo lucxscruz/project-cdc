@@ -1,0 +1,24 @@
+{
+  "name": "postgres-source",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "debezium",
+    "database.password": "debezium",
+    "database.dbname": "cdc_source",
+    "topic.prefix": "pg",
+    "schema.include.list": "public",
+    "table.include.list": "public.customers,public.orders,public.products",
+    "plugin.name": "pgoutput",
+    "publication.name": "debezium_publication",
+    "slot.name": "debezium_slot",
+    "snapshot.mode": "initial",
+    "key.converter": "io.apicurio.registry.utils.converter.ExtJsonConverter",
+    "key.converter.apicurio.registry.url": "http://schema-registry:8080/apis/registry/v2",
+    "key.converter.apicurio.registry.auto-register": "true",
+    "value.converter": "io.apicurio.registry.utils.converter.ExtJsonConverter",
+    "value.converter.apicurio.registry.url": "http://schema-registry:8080/apis/registry/v2",
+    "value.converter.apicurio.registry.auto-register": "true"
+  }
+}
