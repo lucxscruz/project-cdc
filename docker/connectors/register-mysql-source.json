@@ -10,7 +10,7 @@
     "topic.prefix": "mysql",
     "database.include.list": "cdc_source",
     "table.include.list": "cdc_source.employees,cdc_source.departments,cdc_source.audit_log",
-    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+    "schema.history.internal.kafka.bootstrap.servers": "redpanda:29092",
     "schema.history.internal.kafka.topic": "schema-changes.mysql",
     "snapshot.mode": "initial",
     "key.converter": "org.apache.kafka.connect.json.JsonConverter",

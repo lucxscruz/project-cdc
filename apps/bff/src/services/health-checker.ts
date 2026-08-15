@@ -81,7 +81,7 @@ const checks: Record<ServiceName, () => Promise<void>> = {
 
   async "schema-registry"() {
     const res = await fetch(
-      `${config.schemaRegistry.url}/health`
+      `${config.schemaRegistry.url}/subjects`
     );
     if (!res.ok) throw new Error(`Status ${res.status}`);
   },

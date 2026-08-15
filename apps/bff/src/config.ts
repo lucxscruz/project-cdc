@@ -23,7 +23,7 @@ export const config = {
   },
 
   kafka: {
-    brokers: (process.env.KAFKA_BROKERS ?? "kafka:9092").split(","),
+    brokers: (process.env.KAFKA_BROKERS ?? "redpanda:29092").split(","),
   },
 
   minio: {
@@ -35,6 +35,6 @@ export const config = {
   schemaRegistry: {
     url:
       process.env.SCHEMA_REGISTRY_URL ??
-      "http://schema-registry:8080",
+      "http://redpanda:8081",
   },
 } as const;

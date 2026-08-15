@@ -43,57 +43,57 @@ services:
     networks:
       - cdc-network
 
-  kafka:
-    # apache/kafka:3.7.0 crashes with SIGILL on ARM Mac (JDK 21.0.2 bug in registerNatives).
-    # confluentinc/cp-kafka:7.7.0 is Apache Kafka 3.7.x on Java 17 (works on ARM).
-    image: confluentinc/cp-kafka:7.7.0
-    container_name: cdc-kafka
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: cdc-redpanda
     ports:
       - "9092:9092"
-    environment:
-      # KRaft settings
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      # Listeners
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      # Cluster
-      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      - "8081:18081"
+      - "18082:28082"
+      - "9644:9644"
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:29092,external://0.0.0.0:9092
+      - --advertise-kafka-addr=internal://redpanda:29092,external://redpanda:9092
+      - --schema-registry-addr=internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --pandaproxy-addr=internal://0.0.0.0:8082,external://0.0.0.0:28082
+      - --advertise-pandaproxy-addr=internal://redpanda:8082,external://localhost:28082
+      - --node-id=0
     volumes:
-      - kafka_data:/var/lib/kafka/data
+      - redpanda_data:/var/lib/redpanda/data
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-    networks:
-      - cdc-network
-
-  schema-registry:
-    image: apicurio/apicurio-registry-mem:2.5.11.Final
-    container_name: cdc-schema-registry
-    ports:
-      - "8080:8080"
-    environment:
-      REGISTRY_STORAGE_KIND: mem
-      QUARKUS_HTTP_PORT: 8080
-      REGISTRY_RULES_COMPATIBILITY_DEFAULT: BACKWARD
-    depends_on:
-      kafka:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/apis/registry/v2/groups"]
+      test: ["CMD", "rpk", "cluster", "health", "--api-urls", "http://localhost:9644"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - cdc-network
+
+  redpanda-console:
+    image: redpandadata/console:latest
+    container_name: cdc-redpanda-console
+    ports:
+      - "8080:8080"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda:29092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://redpanda:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda:9644"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
     networks:
       - cdc-network
 
@@ -104,30 +104,21 @@ services:
     container_name: cdc-kafka-connect
     ports:
       - "8083:8083"
-      - "9405:9405"
     environment:
       GROUP_ID: 1
-      BOOTSTRAP_SERVERS: kafka:9092
+      BOOTSTRAP_SERVERS: redpanda:29092
       CONFIG_STORAGE_TOPIC: connect_configs
       OFFSET_STORAGE_TOPIC: connect_offsets
       STATUS_STORAGE_TOPIC: connect_statuses
       CONFIG_STORAGE_REPLICATION_FACTOR: 1
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
-      # JSON converter with schemas inline (Apicurio converter not bundled in debezium/connect:2.5)
       KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "true"
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
-      # JMX Exporter
-      # JMX Exporter disabled - jar not included in custom image
-      # KAFKA_OPTS: "-javaagent:/opt/jmx-exporter/jmx_prometheus_javaagent.jar=9405:/opt/jmx-exporter/jmx-exporter-config.yml"
-    volumes:
-      - ./config/kafka-connect/jmx-exporter-config.yml:/opt/jmx-exporter/jmx-exporter-config.yml
     depends_on:
-      kafka:
-        condition: service_healthy
-      schema-registry:
+      redpanda:
         condition: service_healthy
       postgres:
         condition: service_healthy
@@ -177,5 +168,5 @@ services:
 volumes:
   postgres_data:
   mysql_data:
-  kafka_data:
+  redpanda_data:
   minio_data:
