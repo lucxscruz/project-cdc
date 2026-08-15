@@ -1,60 +1,58 @@
 {
-  "dashboard": {
-    "title": "CDC Pipeline",
-    "uid": "cdc-pipeline",
-    "tags": ["cdc"],
-    "timezone": "browser",
-    "panels": [
-      {
-        "title": "Connector Status",
-        "type": "stat",
-        "gridPos": { "h": 4, "w": 12, "x": 0, "y": 0 },
-        "datasource": "Prometheus",
-        "targets": [
-          {
-            "expr": "kafka_connect_connector_status",
-            "legendFormat": "{{connector}}"
-          }
-        ]
-      },
-      {
-        "title": "Source Records Written (rate/min)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
-        "datasource": "Prometheus",
-        "targets": [
-          {
-            "expr": "rate(kafka_connect_source_task_source_record_write_total[1m])",
-            "legendFormat": "{{connector}}"
-          }
-        ]
-      },
-      {
-        "title": "Sink Records Written (rate/min)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
-        "datasource": "Prometheus",
-        "targets": [
-          {
-            "expr": "rate(kafka_connect_sink_task_sink_record_send_total[1m])",
-            "legendFormat": "{{connector}}"
-          }
-        ]
-      },
-      {
-        "title": "Connect Errors (last 30m)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
-        "datasource": "Prometheus",
-        "targets": [
-          {
-            "expr": "rate(kafka_connect_connector_task_total_errors_logged[5m])",
-            "legendFormat": "{{connector}}-task-{{task}}"
-          }
-        ]
-      }
-    ],
-    "time": { "from": "now-1h", "to": "now" },
-    "refresh": "30s"
-  }
+  "title": "CDC Pipeline",
+  "uid": "cdc-pipeline",
+  "tags": ["cdc"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "title": "Connector Status",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "kafka_connect_connector_status",
+          "legendFormat": "{{connector}}"
+        }
+      ]
+    },
+    {
+      "title": "Source Records Written (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(kafka_connect_source_task_source_record_write_total[1m])",
+          "legendFormat": "{{connector}}"
+        }
+      ]
+    },
+    {
+      "title": "Sink Records Written (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(kafka_connect_sink_task_sink_record_send_total[1m])",
+          "legendFormat": "{{connector}}"
+        }
+      ]
+    },
+    {
+      "title": "Connect Errors (last 30m)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(kafka_connect_connector_task_total_errors_logged[5m])",
+          "legendFormat": "{{connector}}-task-{{task}}"
+        }
+      ]
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s"
 }

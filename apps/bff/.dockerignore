@@ -3,10 +3,6 @@ dist
 .git
 .gitignore
 README.md
-.eslintrc.json
-.prettierrc.json
-tsconfig.json
-package-lock.json
 npm-debug.log
 .DS_Store
 .env.local

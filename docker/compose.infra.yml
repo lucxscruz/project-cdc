@@ -1,6 +1,7 @@
 networks:
   cdc-network:
     driver: bridge
+    name: cdc-network
 
 services:
   postgres:
@@ -27,7 +28,7 @@ services:
     image: mysql:8
     container_name: cdc-mysql
     ports:
-      - "3306:3306"
+      - "3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
     command: ["--binlog-format=ROW", "--binlog-row-image=FULL", "--server-id=1", "--log-bin=mysql-bin"]

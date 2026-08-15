@@ -29,10 +29,11 @@ services:
       MINIO_SECRET_KEY: minioadmin
       SCHEMA_REGISTRY_URL: http://schema-registry:8080
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3001/metrics').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 5
+      start_period: 15s
     networks:
       - cdc-network
 
