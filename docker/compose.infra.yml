@@ -97,7 +97,9 @@ services:
       - cdc-network
 
   kafka-connect:
-    image: debezium/connect:2.5
+    build:
+      context: ./kafka-connect
+      dockerfile: Dockerfile
     container_name: cdc-kafka-connect
     ports:
       - "8083:8083"
