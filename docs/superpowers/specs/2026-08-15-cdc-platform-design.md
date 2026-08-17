@@ -17,7 +17,8 @@ Plataforma de CDC containerizada que captura mudancas em bancos PostgreSQL e MyS
 | Bancos fonte | PostgreSQL 16, MySQL 8 |
 | CDC | Debezium 2.5 (pgoutput + binlog) |
 | Streaming | Redpanda (broker Kafka-compativel + Schema Registry integrado) |
-| Sink | Kafka Connect S3 Sink Connector → MinIO (formato JSON) |
+| Serializacao | Avro via `io.confluent.connect.avro.AvroConverter` + Redpanda Schema Registry (`http://redpanda:8081`) |
+| Sink | Kafka Connect S3 Sink Connector → MinIO (formato JSON na saida; Avro dentro do Kafka) |
 | Aplicacao | React (Vite) + Node.js (Fastify) como BFF |
 | Observabilidade | Prometheus, Grafana, Loki, Promtail |
 | Infra | Docker Compose unificado (`docker/docker-compose.yml`) |
@@ -90,8 +91,8 @@ Os scripts `start.sh` e `stop.sh` na raiz do projeto operam sobre o compose unif
 | postgres | postgres:16 | 5432:5432 | `wal_level=logical`, usuario de replicacao, init.sql com tabelas exemplo |
 | mysql | mysql:8 | 3307:3306 | `binlog_format=ROW`, `binlog_row_image=FULL`, usuario replicacao, init.sql |
 | redpanda | redpandadata/redpanda | 9092:9092, 9644:9644, 18081:8081, 18082:8082 | Substitui Kafka broker + Apicurio Schema Registry em um unico container |
-| redpanda-console | redpandadata/console | 8080:8080 | UI web para topicos, consumer groups, schemas |
-| kafka-connect | Build local (docker/kafka-connect/Dockerfile) | 8083:8083 | Imagem customizada sobre debezium/connect:2.5 com S3 Sink Connector pre-instalado via JARs copiados |
+| redpanda-console | redpandadata/console | 8080:8080 | UI web para topicos, mensagens, consumer groups e schemas (Schema Registry integrado habilitado) |
+| kafka-connect | Build local (docker/kafka-connect/Dockerfile) | 8083:8083 | Imagem customizada sobre debezium/connect:2.5; adiciona S3 Sink Connector (JARs pre-baixados), kafka-connect-avro-converter + Guava + failureaccess para AvroConverter; todos os converter JARs copiados para /kafka/libs/; variavel CLASSPATH configurada no servico |
 | minio | minio/minio | 19000:9000 (API) / 19001:9001 (Console) | Bucket `raw` criado via init script |
 
 ### 3.3 Servicos do compose.observability.yml
@@ -115,11 +116,14 @@ Os scripts `start.sh` e `stop.sh` na raiz do projeto operam sobre o compose unif
 ## 4. Pipeline CDC — Fluxo de Dados
 
 ```
-PostgreSQL ──→ Debezium Source Connector ──→ Redpanda Topics ──→ S3 Sink Connector ──→ MinIO
-MySQL      ──→ Debezium Source Connector ──→ Redpanda Topics ──→ S3 Sink Connector ──→ MinIO
+PostgreSQL ──→ Debezium Source Connector ──→ Redpanda Topics (Avro) ──→ S3 Sink Connector ──→ MinIO (JSON)
+MySQL      ──→ Debezium Source Connector ──→ Redpanda Topics (Avro) ──→ S3 Sink Connector ──→ MinIO (JSON)
+                                                      │
+                                               Schema Registry
+                                            (redpanda:8081, BACKWARD)
 ```
 
-Redpanda e Kafka-compativel: Kafka Connect e os connectors Debezium se comunicam com Redpanda usando o protocolo Kafka padrao, sem alteracoes de configuracao no lado dos connectors.
+Redpanda e Kafka-compativel: Kafka Connect e os connectors Debezium se comunicam com Redpanda usando o protocolo Kafka padrao. O AvroConverter serializa key e value em Avro e registra os schemas automaticamente no Schema Registry integrado do Redpanda. O S3 Sink converte os dados para JSON ao gravar no MinIO.
 
 ### 4.1 Source Connectors (Debezium)
 
@@ -136,20 +140,25 @@ Redpanda e Kafka-compativel: Kafka Connect e os connectors Debezium se comunicam
 
 ### 4.2 Converters
 
-- Converter utilizado: `org.apache.kafka.connect.json.JsonConverter` (JsonConverter padrao do Kafka Connect)
-- O `io.apicurio.registry.utils.converter.ExtJsonConverter` foi descartado: a imagem `debezium/connect:2.5` nao inclui os JARs do Apicurio converter, e Redpanda ja fornece Schema Registry integrado se necessario no futuro
-- Mensagens trafegam em JSON simples, sem schema embedado
+- Converter ativo: `io.confluent.connect.avro.AvroConverter` para key e value
+- `schema.registry.url=http://redpanda:8081` (Schema Registry integrado do Redpanda)
+- Mensagens trafegam em **Avro** dentro do Kafka; schemas sao auto-registrados no Schema Registry na primeira mensagem de cada topico
+- Modo de compatibilidade configurado como **BACKWARD** no Schema Registry
+- O `org.apache.kafka.connect.json.JsonConverter` foi substituido: Avro oferece schema evolution e e o padrao em arquiteturas CDC de producao
+- O `io.apicurio.registry.utils.converter.ExtJsonConverter` foi descartado: a imagem `debezium/connect:2.5` nao inclui os JARs do Apicurio; Redpanda ja tem Schema Registry built-in
 - Convencao: `id` (PK) nunca e removido das tabelas
 
 ### 4.3 Sink Connector (MinIO)
 
 - S3 Sink Connector instalado via Dockerfile customizado (`docker/kafka-connect/Dockerfile`) que copia os JARs do plugin pre-baixados para o container
 - Endpoint MinIO configurado como `http://minio:9000` (dentro da rede Docker; a porta do host e 19000)
-- Formato: JSON (JsonConverter)
+- Formato de saida: **JSON** — o S3 Sink faz a desserializacao do Avro e grava JSON legivel no MinIO
 - Bucket: `raw`
 - Path: `{database}.{table}/{ds}/` (ex: `mydb_postgres.public.customers/2026-08-15/`)
 - Particionamento diario por `ds` (YYYY-MM-DD) — facilita processamento posterior por tabela e data
 - Flush: a cada 100 registros ou 60 segundos (o que vier primeiro)
+
+> **Nota sobre formatos:** as mensagens trafegam em Avro dentro do Kafka (converter `io.confluent.connect.avro.AvroConverter`). O sink converte para JSON ao gravar no MinIO, mantendo os arquivos legíveis sem ferramenta especial.
 
 ### 4.4 Dados de Exemplo
 
@@ -364,7 +373,10 @@ Todos os containers compartilham a rede `cdc-network` (bridge driver).
 | Decisao | Justificativa |
 |---|---|
 | Redpanda (nao Kafka + Zookeeper/KRaft) | Broker + Schema Registry em um container so; mais simples para estudo, Kafka-compativel |
-| JsonConverter (nao Apicurio ExtJsonConverter) | `debezium/connect:2.5` nao inclui os JARs do Apicurio converter; JsonConverter funciona out-of-the-box |
+| AvroConverter (`io.confluent.connect.avro.AvroConverter`) | Schema Registry ativo no Redpanda; Avro e o padrao de mercado para CDC — compacto, versionado, com schema evolution; JSON descartado para mensagens Kafka (mantido apenas na saida MinIO) |
+| Apicurio ExtJsonConverter descartado | `debezium/connect:2.5` nao inclui os JARs do Apicurio; Confluent AvroConverter instalado manualmente no Dockerfile com dependencias (Guava, failureaccess) |
+| Converter JARs copiados para /kafka/libs/ | Converters precisam estar no classpath do worker, nao no plugin path; CLASSPATH env var configurada no servico para garantir visibilidade |
+| Compatibilidade BACKWARD no Schema Registry | Configurada no Redpanda em nivel de registry (nao por connector); garante que leitores antigos continuem funcionando com schemas novos |
 | S3 Sink via Dockerfile customizado | Plugin nao incluido na imagem base; JARs copiados no build resolve sem dependencia de internet em runtime |
 | Compose unificado (nao separado por camada) | Simplifica o fluxo de start/stop para o contexto de aprendizado; scripts start.sh/stop.sh encapsulam o comando |
 | Portas host distintas para MySQL/MinIO | Evita conflitos com servicos locais comuns (:3306, :9000/:9001) sem alterar configuracao interna dos containers |
