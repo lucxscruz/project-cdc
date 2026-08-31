@@ -24,6 +24,7 @@ apps/web/
       Connectors.tsx   # Lista de connectors com filtros e ações
       ConnectorDetail.tsx  # Detalhes, config, tasks de um connector
       NewConnector.tsx     # Wizard de criação em 4 etapas
+      Observability.tsx    # Dashboards Grafana embarcados
     components/
       layout/
         Layout.tsx     # Wrapper com Sidebar
@@ -50,6 +51,7 @@ apps/web/
 | `/connectors` | Connectors | Lista paginada com filtro por tipo e estado |
 | `/connectors/:name` | ConnectorDetail | Config JSON, status de tasks, ações |
 | `/connectors/new` | NewConnector | Wizard de criação de connector |
+| `/observability` | Observability | Dashboards Grafana embarcados para observabilidade |
 
 ## Comunicação com o BFF
 

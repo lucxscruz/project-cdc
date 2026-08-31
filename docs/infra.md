@@ -44,8 +44,8 @@ Todos os containers compartilham a rede bridge `cdc-network`. Os serviços se co
 - **Portas**:
   - `9092` — Kafka broker (externo)
   - `29092` — Kafka broker (interno, entre containers)
-  - `8081`/`18081` — Schema Registry
-  - `28082` — Pandaproxy (HTTP Kafka)
+  - Host `8081` → Container `18081` — Schema Registry
+  - Host `18082` → Container `28082` — Pandaproxy (HTTP Kafka)
   - `9644` — Admin API
 - **Config**: `--smp=1 --memory=512M --overprovisioned`
 - **Healthcheck**: `rpk cluster health`
@@ -143,6 +143,7 @@ Todos os dados persistentes usam Docker named volumes:
 | MySQL | 3307 | 3306 |
 | Redpanda Kafka | 9092 | 9092 |
 | Schema Registry | 8081 | 18081 |
+| Pandaproxy | 18082 | 28082 |
 | Redpanda Console | 8080 | 8080 |
 | Kafka Connect | 8083 | 8083 |
 | MinIO API | 19000 | 9000 |
