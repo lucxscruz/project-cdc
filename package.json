@@ -1,0 +1,19 @@
+{
+  "name": "cdc-platform",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:integration": "vitest run --config tests/integration/vitest.integration.config.ts"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0",
+    "typescript": "^5.6.0",
+    "pg": "^8.13.0",
+    "mysql2": "^3.11.0",
+    "kafkajs": "^2.2.4",
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0"
+  }
+}
