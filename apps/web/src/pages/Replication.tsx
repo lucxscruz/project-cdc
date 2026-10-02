@@ -93,10 +93,6 @@ function SourceCard({
     queryClient.invalidateQueries({ queryKey: ["connector-details"] });
   };
 
-  const pauseMut = useMutation({ mutationFn: () => api.connectors.pause(source.name), onSuccess: invalidate });
-  const resumeMut = useMutation({ mutationFn: () => api.connectors.resume(source.name), onSuccess: invalidate });
-  const restartMut = useMutation({ mutationFn: () => api.connectors.restart(source.name), onSuccess: invalidate });
-
   const updateTablesMut = useMutation({
     mutationFn: (newTables: string[]) =>
       api.connectors.update(source.name, {
@@ -137,18 +133,9 @@ function SourceCard({
             {source.database} &middot; prefix: {source.topicPrefix}
           </span>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button className="acao" onClick={() => setShowDetails((v) => !v)}>
-            {showDetails ? "Ocultar" : "Detalhes"}
-          </button>
-          {source.state === "RUNNING" && (
-            <button className="acao warn" onClick={() => pauseMut.mutate()} disabled={pauseMut.isPending}>Pause</button>
-          )}
-          {source.state === "PAUSED" && (
-            <button className="acao ok" onClick={() => resumeMut.mutate()} disabled={resumeMut.isPending}>Resume</button>
-          )}
-          <button className="acao" onClick={() => restartMut.mutate()} disabled={restartMut.isPending}>Restart</button>
-        </div>
+        <button className="acao" onClick={() => setShowDetails((v) => !v)}>
+          {showDetails ? "Ocultar detalhes" : "Detalhes da conexao"}
+        </button>
       </div>
 
       {showDetails && (
