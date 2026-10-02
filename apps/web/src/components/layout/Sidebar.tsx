@@ -1,35 +1,37 @@
 import { NavLink } from "react-router-dom";
 
 const links = [
-  { to: "/", label: "Dashboard", icon: "◉" },
-  { to: "/connectors", label: "Connectors", icon: "⇋" },
-  { to: "/connectors/new", label: "New Connector", icon: "+" },
-  { to: "/observability", label: "Observability", icon: "◎" },
+  { to: "/", label: "Dashboard", end: true },
+  { to: "/connectors", label: "Connectors", end: false },
+  { to: "/observability", label: "Observability", end: false },
 ];
 
 export function Sidebar() {
   return (
-    <aside className="w-64 bg-gray-900 text-gray-100 min-h-screen p-4">
-      <h1 className="text-xl font-bold mb-8 px-2">CDC Platform</h1>
-      <nav className="space-y-1">
+    <aside className="sidebar">
+      <div className="brand">
+        <span className="brand-name">
+          <b>CDC Platform</b>
+          <small>Control room</small>
+        </span>
+      </div>
+      <div className="nav-label">Workspace</div>
+      <nav className="nav">
         {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
-            end={link.to === "/"}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-md text-sm ${
-                isActive
-                  ? "bg-gray-700 text-white"
-                  : "text-gray-400 hover:bg-gray-800 hover:text-white"
-              }`
-            }
+            end={link.end}
+            className={({ isActive }) => isActive ? "active" : ""}
           >
-            <span className="text-lg">{link.icon}</span>
             {link.label}
           </NavLink>
         ))}
       </nav>
+      <div className="sidebar-rodape">
+        <b><i className="dot" /> Local dev</b>
+        <small>localhost</small>
+      </div>
     </aside>
   );
 }
