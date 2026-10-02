@@ -247,6 +247,37 @@ services:
       - cdc-network
 
   # ============================================================
+  # QUERY ENGINE (Trino)
+  # ============================================================
+  trino:
+    image: trinodb/trino:latest
+    container_name: cdc-trino
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./config/trino/config.properties:/etc/trino/config.properties
+      - ./config/trino/jvm.config:/etc/trino/jvm.config
+      - ./config/trino/node.properties:/etc/trino/node.properties
+      - ./config/trino/catalog/postgres.properties:/etc/trino/catalog/postgres.properties
+      - ./config/trino/catalog/mysql.properties:/etc/trino/catalog/mysql.properties
+      - ./config/trino/catalog/minio.properties:/etc/trino/catalog/minio.properties
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8085/v1/info | grep -q '\"starting\":false'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - cdc-network
+
+  # ============================================================
   # APPLICATION (BFF + Web)
   # ============================================================
   bff:
