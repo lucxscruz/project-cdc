@@ -3,6 +3,13 @@ import { useParams, Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { ConnectorActions } from "../components/connectors/ConnectorActions";
 
+const stateBadge: Record<string, string> = {
+  RUNNING: "ok",
+  PAUSED: "warn",
+  FAILED: "err",
+  UNASSIGNED: "quiet",
+};
+
 export function ConnectorDetail() {
   const { name } = useParams<{ name: string }>();
   const { data: connector, isLoading } = useQuery({
@@ -11,39 +18,48 @@ export function ConnectorDetail() {
     refetchInterval: 10_000,
   });
 
-  if (isLoading) return <p className="text-gray-500">Loading...</p>;
-  if (!connector) return <p className="text-red-500">Connector not found</p>;
+  if (isLoading) {
+    return <div className="painel"><div className="painel-corpo" style={{ padding: 16 }}><div className="esqueleto" style={{ height: 200 }} /></div></div>;
+  }
+  if (!connector) {
+    return <div className="vazio"><b>Connector not found</b></div>;
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link to="/connectors" className="text-gray-400 hover:text-gray-600">&larr;</Link>
-        <h2 className="text-2xl font-bold text-gray-900">{connector.name}</h2>
+    <>
+      <div className="cabecalho">
+        <div>
+          <Link to="/connectors" className="voltar">&larr; Connectors</Link>
+          <h1 style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {connector.name}
+            <span className={`badge ${stateBadge[connector.state] ?? "quiet"}`}>{connector.state}</span>
+          </h1>
+        </div>
         <ConnectorActions name={connector.name} state={connector.state} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg border p-4">
-          <h3 className="text-sm font-medium text-gray-500 mb-3">Configuration</h3>
-          <pre className="text-xs bg-gray-50 p-3 rounded overflow-auto max-h-96">
-            {JSON.stringify(connector.config, null, 2)}
-          </pre>
+      <div className="detalhe-grid">
+        <div className="painel">
+          <div className="painel-topo"><h2>Configuration</h2></div>
+          <div className="painel-corpo" style={{ padding: "12px 16px" }}>
+            <pre className="config-pre">{JSON.stringify(connector.config, null, 2)}</pre>
+          </div>
         </div>
 
-        <div className="bg-white rounded-lg border p-4">
-          <h3 className="text-sm font-medium text-gray-500 mb-3">Tasks</h3>
-          <div className="space-y-2">
+        <div className="painel">
+          <div className="painel-topo"><h2>Tasks</h2></div>
+          <div className="painel-corpo">
             {connector.tasks.map((task) => (
-              <div key={task.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded">
-                <span className={`w-2 h-2 rounded-full ${task.state === "RUNNING" ? "bg-green-500" : "bg-red-500"}`} />
-                <span className="text-sm font-medium">Task {task.id}</span>
-                <span className="text-xs text-gray-500">{task.state}</span>
-                <span className="text-xs text-gray-400 ml-auto">{task.workerId}</span>
+              <div key={task.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: "1px solid var(--hair)" }}>
+                <i className="dot" style={{ background: task.state === "RUNNING" ? "var(--ok)" : "var(--err)" }} />
+                <span className="mono" style={{ fontWeight: 500 }}>Task {task.id}</span>
+                <span className={`badge ${stateBadge[task.state] ?? "quiet"}`}>{task.state}</span>
+                <span className="mono" style={{ marginLeft: "auto", fontSize: 11, color: "var(--quiet)" }}>{task.workerId}</span>
               </div>
             ))}
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
