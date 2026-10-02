@@ -1,5 +1,8 @@
 -- Enable logical replication (set via command args, this script handles schema)
 
+-- Create Superset metadata database
+CREATE DATABASE superset;
+
 -- Create replication user for Debezium
 CREATE ROLE debezium WITH LOGIN PASSWORD 'debezium' REPLICATION;
 
