@@ -21,35 +21,35 @@ export function Observability() {
   });
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Observability</h2>
+    <>
+      <div className="cabecalho">
+        <div>
+          <div className="eyebrow">Monitoring</div>
+          <h1>Observability</h1>
+          <p>Dashboards Grafana e health check dos servicos.</p>
+        </div>
+      </div>
 
       {health && <ServiceHealth services={health.services} />}
 
-      <div className="bg-white rounded-lg border">
-        <div className="flex border-b">
+      <div className="painel">
+        <div className="tabs">
           {dashboards.map((d) => (
             <button
               key={d.uid}
               onClick={() => setActiveDashboard(d.uid)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px ${
-                activeDashboard === d.uid
-                  ? "border-gray-900 text-gray-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
+              className={`tab ${activeDashboard === d.uid ? "ativo" : ""}`}
             >
               {d.title}
             </button>
           ))}
         </div>
-
         <iframe
-          src={`${GRAFANA_URL}/d/${activeDashboard}?orgId=1&kiosk`}
-          className="w-full border-0"
-          style={{ height: "600px" }}
+          src={`${GRAFANA_URL}/d/${activeDashboard}?orgId=1&kiosk&theme=dark`}
+          style={{ width: "100%", height: 600, border: 0, borderRadius: "0 0 12px 12px", background: "var(--bg)" }}
           title={activeDashboard}
         />
       </div>
-    </div>
+    </>
   );
 }
