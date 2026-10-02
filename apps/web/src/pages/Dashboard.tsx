@@ -4,21 +4,13 @@ import { StatusCard } from "../components/dashboard/StatusCard";
 import { ServiceHealth } from "../components/dashboard/ServiceHealth";
 
 export function Dashboard() {
-  const {
-    data: connectors,
-    isLoading: loadingConnectors,
-    isError: connectorsError,
-  } = useQuery({
+  const { data: connectors, isLoading: loadingConnectors } = useQuery({
     queryKey: ["connectors"],
     queryFn: api.connectors.list,
     refetchInterval: 10_000,
   });
 
-  const {
-    data: health,
-    isLoading: loadingHealth,
-    isError: healthError,
-  } = useQuery({
+  const { data: health, isLoading: loadingHealth } = useQuery({
     queryKey: ["health"],
     queryFn: api.health.getAll,
     refetchInterval: 10_000,
@@ -27,32 +19,38 @@ export function Dashboard() {
   const running = connectors?.filter((c) => c.state === "RUNNING").length ?? 0;
   const paused = connectors?.filter((c) => c.state === "PAUSED").length ?? 0;
   const failed = connectors?.filter((c) => c.state === "FAILED").length ?? 0;
+  const total = connectors?.length ?? 0;
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+    <>
+      <div className="cabecalho">
+        <div>
+          <div className="eyebrow">Control room</div>
+          <h1>Dashboard</h1>
+          <p>Visao geral dos connectors e servicos do pipeline CDC.</p>
+        </div>
+      </div>
 
-      {/* Connector status cards */}
       {loadingConnectors ? (
-        <p className="text-gray-500">Loading connectors…</p>
-      ) : connectorsError ? (
-        <p className="text-red-600 text-sm">Failed to load connector data.</p>
+        <div className="kpis">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="kpi"><div className="esqueleto" style={{ height: 40, width: "60%" }} /></div>
+          ))}
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatusCard label="Running" count={running} color="green" />
-          <StatusCard label="Paused" count={paused} color="yellow" />
-          <StatusCard label="Failed" count={failed} color="red" />
+        <div className="kpis">
+          <StatusCard label="Total" count={total} color="quiet" />
+          <StatusCard label="Running" count={running} color="ok" />
+          <StatusCard label="Paused" count={paused} color="warn" />
+          <StatusCard label="Failed" count={failed} color="err" />
         </div>
       )}
 
-      {/* Service health */}
       {loadingHealth ? (
-        <p className="text-gray-500">Loading health…</p>
-      ) : healthError ? (
-        <p className="text-red-600 text-sm">Failed to load service health.</p>
+        <div className="painel"><div className="painel-corpo" style={{ padding: 16 }}><div className="esqueleto" style={{ height: 60 }} /></div></div>
       ) : (
         health && <ServiceHealth services={health.services} />
       )}
-    </div>
+    </>
   );
 }
