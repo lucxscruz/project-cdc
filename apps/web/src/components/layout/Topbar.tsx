@@ -5,6 +5,7 @@ const pageNames: Record<string, string> = {
   "/": "Dashboard",
   "/connectors": "Connectors",
   "/connectors/new": "Novo Connector",
+  "/replication": "Replication",
   "/observability": "Observability",
 };
 

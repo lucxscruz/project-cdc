@@ -6,6 +6,7 @@ import { Connectors } from "./pages/Connectors";
 import { ConnectorDetail } from "./pages/ConnectorDetail";
 import { NewConnector } from "./pages/NewConnector";
 import { Observability } from "./pages/Observability";
+import { Replication } from "./pages/Replication";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,7 @@ export default function App() {
             <Route path="/connectors" element={<Connectors />} />
             <Route path="/connectors/new" element={<NewConnector />} />
             <Route path="/connectors/:name" element={<ConnectorDetail />} />
+            <Route path="/replication" element={<Replication />} />
             <Route path="/observability" element={<Observability />} />
           </Route>
         </Routes>
