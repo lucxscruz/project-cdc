@@ -3,11 +3,11 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { ConnectorActions } from "../components/connectors/ConnectorActions";
 
-const stateColors: Record<string, string> = {
-  RUNNING: "bg-green-100 text-green-800",
-  PAUSED: "bg-yellow-100 text-yellow-800",
-  FAILED: "bg-red-100 text-red-800",
-  UNASSIGNED: "bg-gray-100 text-gray-800",
+const stateBadge: Record<string, string> = {
+  RUNNING: "ok",
+  PAUSED: "warn",
+  FAILED: "err",
+  UNASSIGNED: "quiet",
 };
 
 export function Connectors() {
@@ -17,57 +17,60 @@ export function Connectors() {
     refetchInterval: 10_000,
   });
 
-  if (isLoading) return <p className="text-gray-500">Loading...</p>;
-
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">Connectors</h2>
-        <Link
-          to="/connectors/new"
-          className="px-4 py-2 bg-gray-900 text-white rounded-md text-sm hover:bg-gray-700"
-        >
-          New Connector
-        </Link>
+    <>
+      <div className="cabecalho">
+        <div>
+          <div className="eyebrow">Pipeline</div>
+          <h1>Connectors</h1>
+          <p>Gerencie os connectors Debezium e S3 Sink.</p>
+        </div>
+        <Link to="/connectors/new" className="acao primaria">Novo Connector</Link>
       </div>
 
-      <div className="bg-white rounded-lg border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="text-left p-3 font-medium text-gray-500">Name</th>
-              <th className="text-left p-3 font-medium text-gray-500">Type</th>
-              <th className="text-left p-3 font-medium text-gray-500">Status</th>
-              <th className="text-left p-3 font-medium text-gray-500">Tasks</th>
-              <th className="text-left p-3 font-medium text-gray-500">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {connectors?.map((c) => (
-              <tr key={c.name} className="hover:bg-gray-50">
-                <td className="p-3">
-                  <Link
-                    to={`/connectors/${c.name}`}
-                    className="text-blue-600 hover:underline font-medium"
-                  >
-                    {c.name}
-                  </Link>
-                </td>
-                <td className="p-3 text-gray-600">{c.type}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${stateColors[c.state] ?? stateColors.UNASSIGNED}`}>
-                    {c.state}
-                  </span>
-                </td>
-                <td className="p-3 text-gray-600">{c.tasks.length}</td>
-                <td className="p-3">
-                  <ConnectorActions name={c.name} state={c.state} />
-                </td>
+      <div className="painel">
+        {isLoading ? (
+          <div className="painel-corpo" style={{ padding: 16 }}>
+            <div className="esqueleto" style={{ height: 120 }} />
+          </div>
+        ) : !connectors?.length ? (
+          <div className="vazio">
+            <b>Nenhum connector registrado</b>
+            <p>Crie um novo connector para comecar a capturar mudancas.</p>
+          </div>
+        ) : (
+          <table className="densa">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Tasks</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {connectors.map((c) => (
+                <tr key={c.name}>
+                  <td className="mono">
+                    <Link to={`/connectors/${c.name}`} style={{ color: "var(--info)", textDecoration: "none" }}>
+                      {c.name}
+                    </Link>
+                  </td>
+                  <td style={{ color: "var(--muted)" }}>{c.type}</td>
+                  <td>
+                    <span className={`badge ${stateBadge[c.state] ?? "quiet"}`}>{c.state}</span>
+                  </td>
+                  <td className="mono">{c.tasks.length}</td>
+                  <td>
+                    <ConnectorActions name={c.name} state={c.state} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
-    </div>
+    </>
   );
 }
