@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-echo "Installing Trino driver..."
-pip install trino -q
-
 echo "Initializing Superset..."
 
 # Create admin user

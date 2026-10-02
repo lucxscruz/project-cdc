@@ -331,7 +331,9 @@ services:
   # BI / SQL Lab (Apache Superset)
   # ============================================================
   superset:
-    image: apache/superset:latest
+    build:
+      context: ./config/superset
+      dockerfile: Dockerfile
     container_name: cdc-superset
     ports:
       - "8088:8088"
