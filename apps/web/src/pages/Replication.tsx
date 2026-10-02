@@ -24,16 +24,17 @@ function parseSourceConnectors(
     const cfg = d.config;
     const connectorClass = cfg["connector.class"] ?? "";
 
-    if (!connectorClass.includes("Source") && !connectorClass.includes("source")) continue;
+    const isSource = connectorClass.includes("debezium") || connectorClass.includes("Source") || connectorClass.includes("source");
+    if (!isSource) continue;
 
     const tableList = cfg["table.include.list"] ?? "";
     const tables = tableList ? tableList.split(",").map((t) => t.trim()) : [];
 
     let database = "unknown";
     if (connectorClass.includes("postgresql") || connectorClass.includes("Postgres")) {
-      database = cfg["database.dbname"] ?? "postgres";
+      database = "postgres";
     } else if (connectorClass.includes("mysql") || connectorClass.includes("MySql")) {
-      database = cfg["database.include.list"] ?? "mysql";
+      database = "mysql";
     }
 
     sources.push({
