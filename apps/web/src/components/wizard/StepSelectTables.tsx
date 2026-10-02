@@ -13,7 +13,7 @@ export function StepSelectTables({ database, selected, onChange }: StepSelectTab
     queryFn: () => api.databases.tables(database),
   });
 
-  if (isLoading) return <p className="text-gray-500">Loading tables...</p>;
+  if (isLoading) return <div className="esqueleto" style={{ height: 80 }} />;
 
   const toggle = (fullName: string) => {
     onChange(
@@ -24,32 +24,23 @@ export function StepSelectTables({ database, selected, onChange }: StepSelectTab
   };
 
   return (
-    <div className="space-y-3">
-      <h3 className="text-lg font-medium">Select Tables</h3>
-      <p className="text-sm text-gray-500">Database: {database}</p>
-      <div className="space-y-2">
+    <div>
+      <h3>Tabelas</h3>
+      <p style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Database: <span className="mono">{database}</span></p>
+      <div className="selector">
         {tables?.map((t) => {
           const fullName = `${t.schema}.${t.name}`;
           return (
-            <label
+            <button
               key={fullName}
-              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
-                selected.includes(fullName) ? "border-gray-900 bg-gray-50" : "border-gray-200"
-              }`}
+              onClick={() => toggle(fullName)}
+              className={`selector-item ${selected.includes(fullName) ? "selecionado" : ""}`}
             >
-              <input
-                type="checkbox"
-                checked={selected.includes(fullName)}
-                onChange={() => toggle(fullName)}
-                className="rounded"
-              />
               <div>
-                <p className="text-sm font-medium">{fullName}</p>
-                <p className="text-xs text-gray-400">
-                  {t.rowCount !== null ? `~${t.rowCount} rows` : ""}
-                </p>
+                <b className="mono">{fullName}</b>
+                {t.rowCount !== null && <><br /><small>~{t.rowCount} rows</small></>}
               </div>
-            </label>
+            </button>
           );
         })}
       </div>

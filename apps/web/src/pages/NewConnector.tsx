@@ -13,6 +13,8 @@ const templateToDb: Record<string, string> = {
   "s3-sink-minio": "postgres",
 };
 
+const stepLabels = ["Tipo", "Tabelas", "Opcoes", "Revisar"];
+
 export function NewConnector() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -58,47 +60,52 @@ export function NewConnector() {
     (step === 3 && generatedConfig);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">New Connector</h2>
-
-      <div className="flex gap-2 mb-6">
-        {["Type", "Tables", "Options", "Review"].map((label, i) => (
-          <div
-            key={label}
-            className={`flex-1 h-1 rounded ${i <= step ? "bg-gray-900" : "bg-gray-200"}`}
-          />
-        ))}
+    <>
+      <div className="cabecalho">
+        <div>
+          <div className="eyebrow">Pipeline</div>
+          <h1>Novo Connector</h1>
+          <p>Passo {step + 1} de {stepLabels.length}: {stepLabels[step]}</p>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg border p-6">{steps[step]}</div>
+      <div className="wizard">
+        <div className="progresso">
+          {stepLabels.map((_, i) => (
+            <div key={i} className={`progresso-segmento ${i <= step ? "ativo" : ""}`} />
+          ))}
+        </div>
 
-      <div className="flex justify-between">
-        <button
-          onClick={() => setStep((s) => s - 1)}
-          disabled={step === 0}
-          className="px-4 py-2 text-sm border rounded-md disabled:opacity-30"
-        >
-          Back
-        </button>
+        <div className="wizard-card">{steps[step]}</div>
 
-        {step < 3 ? (
+        <div className="wizard-acoes">
           <button
-            onClick={() => setStep((s) => s + 1)}
-            disabled={!canNext}
-            className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md disabled:opacity-30"
+            className="acao"
+            onClick={() => setStep((s) => s - 1)}
+            disabled={step === 0}
           >
-            Next
+            Voltar
           </button>
-        ) : (
-          <button
-            onClick={() => generatedConfig && createMutation.mutate(generatedConfig)}
-            disabled={!generatedConfig || createMutation.isPending}
-            className="px-4 py-2 text-sm bg-green-600 text-white rounded-md disabled:opacity-30"
-          >
-            {createMutation.isPending ? "Creating..." : "Create Connector"}
-          </button>
-        )}
+
+          {step < 3 ? (
+            <button
+              className="acao primaria"
+              onClick={() => setStep((s) => s + 1)}
+              disabled={!canNext}
+            >
+              Proximo
+            </button>
+          ) : (
+            <button
+              className="acao primaria"
+              onClick={() => generatedConfig && createMutation.mutate(generatedConfig)}
+              disabled={!generatedConfig || createMutation.isPending}
+            >
+              {createMutation.isPending ? "Criando..." : "Criar Connector"}
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
