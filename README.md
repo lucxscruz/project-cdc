@@ -1,5 +1,7 @@
 # CDC Platform
 
+![Fluxo de captura e sincronização de dados](image/Fluxo%20de%20captura%20e%20sincronização%20de%20dados.png)
+
 Projeto de captura de dados (CDC) em bancos PostgreSQL e MySQL via Debezium, transmitindo dados em streaming via Redpanda, materialização em tabelas Iceberg no MinIO e consumo federado via Trino e Superset.
 
 ## Arquitetura
