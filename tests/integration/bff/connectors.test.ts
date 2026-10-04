@@ -18,6 +18,17 @@ describe("BFF API — Connectors", () => {
 
     const names = body.map((c: any) => c.name);
     expect(names).toContain("postgres-source");
+    expect(names).toContain("mysql-source");
+  });
+
+  it("GET /api/connectors deve incluir source e sink connectors", async () => {
+    const res = await fetch(`${bffUrl}/api/connectors`);
+    const body = await res.json();
+    const names = body.map((c: any) => c.name);
+
+    expect(names).toContain("postgres-source-iceberg");
+    expect(names).toContain("iceberg-sink-postgres");
+    expect(names).toContain("iceberg-sink-mysql");
   });
 
   it("GET /api/connectors/:name deve retornar detalhes", async () => {
@@ -29,6 +40,18 @@ describe("BFF API — Connectors", () => {
     expect(body.config).toBeDefined();
     expect(body.tasks).toBeDefined();
     expect(body.state).toBeDefined();
+  });
+
+  it("GET /api/connectors/:name deve retornar detalhes do source iceberg", async () => {
+    const res = await fetch(`${bffUrl}/api/connectors/postgres-source-iceberg`);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.name).toBe("postgres-source-iceberg");
+    expect(body.config["topic.prefix"]).toBe("pg-iceberg");
+    expect(body.config["transforms.unwrap.type"]).toBe(
+      "io.debezium.transforms.ExtractNewRecordState",
+    );
   });
 
   it("deve suportar pause e resume de connector", async () => {

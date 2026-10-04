@@ -2,7 +2,9 @@ import { describe, it, expect, beforeAll } from "vitest";
 import {
   getTestMysqlConnection,
   getTestKafka,
+  getTestMinioClient,
   waitForServices,
+  listMinioObjects,
   SCHEMA_REGISTRY_URL,
 } from "../setup.js";
 
@@ -30,7 +32,7 @@ describe("Pipeline CDC — MySQL", () => {
     await consumer.connect();
     await consumer.subscribe({
       topic: "mysql.cdc_source.employees",
-      fromBeginning: true,
+      fromBeginning: false,
     });
 
     const found = await new Promise<boolean>((resolve) => {
@@ -57,5 +59,17 @@ describe("Pipeline CDC — MySQL", () => {
 
     expect(subjects).toContain("mysql.cdc_source.employees-value");
     expect(subjects).toContain("mysql.cdc_source.employees-key");
+  });
+
+  it("deve ter objetos Iceberg no MinIO warehouse para MySQL", async () => {
+    const minio = getTestMinioClient();
+    const result = await listMinioObjects(
+      minio,
+      "warehouse",
+      "iceberg_db/mysql_employees/",
+    );
+
+    expect(result.Contents).toBeDefined();
+    expect(result.Contents!.length).toBeGreaterThan(0);
   });
 });

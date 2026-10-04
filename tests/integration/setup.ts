@@ -28,6 +28,8 @@ export const KAFKA_BROKERS = ["localhost:9092"];
 export const KAFKA_CONNECT_URL = "http://localhost:8083";
 export const SCHEMA_REGISTRY_URL = "http://localhost:8081";
 export const MINIO_ENDPOINT = "http://localhost:19000";
+export const TRINO_URL = "http://localhost:8085";
+export const SUPERSET_URL = "http://localhost:8088";
 export const BFF_URL = "http://localhost:3001";
 
 export function getTestPgClient(): pg.Client {
@@ -101,6 +103,18 @@ export async function waitForServices(): Promise<void> {
 
   await waitForService("schema-registry", async () => {
     const res = await fetch(`${SCHEMA_REGISTRY_URL}/subjects`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  });
+
+  await waitForService("trino", async () => {
+    const res = await fetch(`${TRINO_URL}/v1/info`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    if (body.starting) throw new Error("Trino still starting");
+  });
+
+  await waitForService("superset", async () => {
+    const res = await fetch(`${SUPERSET_URL}/health`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   });
 }

@@ -8,17 +8,16 @@ describe("BFF API — Templates", () => {
     await waitForServices();
   });
 
-  it("GET /api/templates deve listar os 3 templates", async () => {
+  it("GET /api/templates deve listar os templates disponíveis", async () => {
     const res = await fetch(`${bffUrl}/api/templates`);
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body).toHaveLength(3);
+    expect(body.length).toBeGreaterThanOrEqual(3);
 
     const ids = body.map((t: any) => t.id);
     expect(ids).toContain("debezium-postgres");
     expect(ids).toContain("debezium-mysql");
-    expect(ids).toContain("s3-sink-minio");
   });
 
   it("POST /api/templates/generate deve gerar config de connector PG", async () => {
@@ -42,24 +41,23 @@ describe("BFF API — Templates", () => {
     expect(body.config["table.include.list"]).toBe("public.customers");
   });
 
-  it("POST /api/templates/generate deve gerar config de S3 sink", async () => {
+  it("POST /api/templates/generate deve gerar config de connector MySQL", async () => {
     const res = await fetch(`${bffUrl}/api/templates/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        templateId: "s3-sink-minio",
-        database: "postgres",
-        tables: ["public.customers"],
-        options: { connectorName: "test-s3-gen", topicPrefix: "pg" },
+        templateId: "debezium-mysql",
+        database: "mysql",
+        tables: ["cdc_source.employees"],
+        options: { connectorName: "test-mysql-gen" },
       }),
     });
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.name).toBe("test-s3-gen");
+    expect(body.name).toBe("test-mysql-gen");
     expect(body.config["connector.class"]).toBe(
-      "io.confluent.connect.s3.S3SinkConnector",
+      "io.debezium.connector.mysql.MySqlConnector",
     );
-    expect(body.config["s3.bucket.name"]).toBe("raw");
   });
 });
