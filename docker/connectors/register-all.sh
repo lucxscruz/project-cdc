@@ -9,7 +9,9 @@ until curl -sf "$CONNECT_URL/connectors" > /dev/null 2>&1; do
 done
 echo "Kafka Connect is ready."
 
-for file in docker/connectors/register-*.json; do
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+for file in "$SCRIPT_DIR"/register-*.json; do
   name=$(jq -r '.name' "$file")
   echo "Registering connector: $name"
   curl -sf -X POST "$CONNECT_URL/connectors" \

@@ -1,10 +1,12 @@
 FROM debezium/connect:2.5
 
-# Copy S3 Sink Connector plugin (pre-downloaded)
+# Copy S3 Sink Connector plugin (legacy, kept for backwards compat)
 COPY s3-plugin/ /kafka/connect/kafka-connect-s3/
 
+# Copy Iceberg Sink Connector plugin (pre-downloaded)
+COPY iceberg-plugin/ /kafka/connect/iceberg-sink/
+
 # Copy Avro/Schema Registry converter JARs to the Kafka libs directory
-# These must be on the worker classpath (not plugin path) for converters to work
 USER root
 RUN cp /kafka/connect/kafka-connect-s3/kafka-connect-avro-converter-*.jar \
        /kafka/connect/kafka-connect-s3/kafka-connect-avro-data-*.jar \

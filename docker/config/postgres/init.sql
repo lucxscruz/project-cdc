@@ -3,6 +3,9 @@
 -- Create Superset metadata database
 CREATE DATABASE superset;
 
+-- Create Iceberg JDBC catalog database
+CREATE DATABASE iceberg_catalog;
+
 -- Create replication user for Debezium
 CREATE ROLE debezium WITH LOGIN PASSWORD 'debezium' REPLICATION;
 

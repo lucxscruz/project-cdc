@@ -260,7 +260,7 @@ services:
       - ./config/trino/node.properties:/etc/trino/node.properties
       - ./config/trino/catalog/postgres.properties:/etc/trino/catalog/postgres.properties
       - ./config/trino/catalog/mysql.properties:/etc/trino/catalog/mysql.properties
-      - ./config/trino/catalog/minio.properties:/etc/trino/catalog/minio.properties
+      - ./config/trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
     depends_on:
       postgres:
         condition: service_healthy
