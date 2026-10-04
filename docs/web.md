@@ -7,7 +7,7 @@ Aplicação React para gerenciamento visual da plataforma CDC.
 - **Framework**: React 18.3
 - **Build**: Vite 5.4
 - **Linguagem**: TypeScript
-- **Estilo**: TailwindCSS 4.0
+- **Estilo**: CSS custom properties (tema escuro/claro, tipografia Geist)
 - **Data fetching**: TanStack React Query 5.56
 - **Roteamento**: React Router v6
 - **Diretório**: `apps/web/`
@@ -19,25 +19,28 @@ apps/web/
   src/
     main.tsx           # Entrypoint React
     App.tsx            # Router setup
+    index.css          # Design system (CSS custom properties)
     pages/
-      Dashboard.tsx    # Visão geral — status dos serviços e connectors
-      Connectors.tsx   # Lista de connectors com filtros e ações
-      ConnectorDetail.tsx  # Detalhes, config, tasks de um connector
-      NewConnector.tsx     # Wizard de criação em 4 etapas
+      Dashboard.tsx    # KPIs dos connectors e health dos servicos
+      Connectors.tsx   # Lista de connectors com acoes
+      ConnectorDetail.tsx  # Config JSON, tasks, status
+      NewConnector.tsx     # Wizard de criacao em 4 etapas
+      Replication.tsx      # Gestao de tabelas replicadas por source
       Observability.tsx    # Dashboards Grafana embarcados
     components/
       layout/
-        Layout.tsx     # Wrapper com Sidebar
-        Sidebar.tsx    # Navegação lateral
+        Layout.tsx     # Shell (sidebar + topbar + pagina)
+        Sidebar.tsx    # Navegacao lateral com marca e links
+        Topbar.tsx     # Breadcrumb, toggle de tema, indicador ao vivo
       dashboard/
-        ServiceHealth.tsx  # Card de saúde dos serviços
-        StatusCard.tsx     # Card genérico de status
+        ServiceHealth.tsx  # Grid de saude dos servicos
+        StatusCard.tsx     # KPI card com cor por estado
       connectors/
-        ConnectorActions.tsx  # Botões de ação (pause, resume, restart, delete)
+        ConnectorActions.tsx  # Botoes de acao (pause, resume, restart, delete)
       wizard/
         StepSelectType.tsx     # Etapa 1: selecionar tipo (source/sink)
         StepSelectTables.tsx   # Etapa 2: selecionar tabelas
-        StepOptions.tsx        # Etapa 3: configurar opções
+        StepOptions.tsx        # Etapa 3: configurar opcoes
         StepPreview.tsx        # Etapa 4: preview e confirmar
     lib/
       api.ts           # Fetch wrapper para o BFF
@@ -45,43 +48,52 @@ apps/web/
 
 ## Rotas
 
-| Path | Página | Descrição |
+| Path | Pagina | Descricao |
 |------|--------|-----------|
-| `/` | Dashboard | Status dos serviços, connectors ativos, métricas gerais |
-| `/connectors` | Connectors | Lista paginada com filtro por tipo e estado |
-| `/connectors/:name` | ConnectorDetail | Config JSON, status de tasks, ações |
-| `/connectors/new` | NewConnector | Wizard de criação de connector |
-| `/observability` | Observability | Dashboards Grafana embarcados para observabilidade |
+| `/` | Dashboard | KPIs (total, running, paused, failed) e health dos servicos |
+| `/connectors` | Connectors | Tabela densa com badges de status e acoes |
+| `/connectors/:name` | ConnectorDetail | Config JSON, lista de tasks, acoes |
+| `/connectors/new` | NewConnector | Wizard de criacao de connector em 4 passos |
+| `/replication` | Replication | Tabelas replicadas por source, com acoes por tabela |
+| `/observability` | Observability | Dashboards Grafana embarcados com tabs |
 
-## Comunicação com o BFF
+## Design System
 
-Todas as chamadas passam pelo wrapper `lib/api.ts` que faz `fetch` para `http://localhost:3001/api` (dev) ou `/api` (produção via proxy).
+O frontend usa CSS custom properties ao inves de Tailwind. O design system esta definido em `src/index.css`:
+
+- **Tema escuro** como padrao (`data-theme="escuro"`)
+- **Tema claro** via toggle no topbar (persistido em localStorage)
+- **Tipografia**: Geist Sans + Geist Mono (via CDN)
+- **Cores**: `--primary: #FE3E6D`, `--ok`, `--warn`, `--err`, `--info`
+- **Componentes CSS**: `.shell`, `.sidebar`, `.topbar`, `.kpi`, `.painel`, `.densa`, `.badge`, `.acao`, `.selector`, etc.
+
+## Pagina Replication
+
+Gerencia a replicacao de tabelas individualmente por source connector:
+
+- **Tabelas replicando**: badge verde, botoes de pausar (⏸) e remover (✕)
+- **Tabelas pausadas**: badge amarelo, botoes de retomar (▶) e remover (✕)
+- **Tabelas disponiveis**: botao de adicionar (+)
+- **Adicionar tabela**: botao no header abre fluxo para selecionar source e tabelas
+- **Detalhes da conexao**: toggle com host, porta, user, snapshot mode, slot, plugin
+- **Estado de pausa**: persistido em localStorage para diferenciar de "nunca adicionada"
+
+## Comunicacao com o BFF
+
+Todas as chamadas passam pelo wrapper `lib/api.ts` que faz `fetch` para `/api` (proxy em dev, nginx em producao).
 
 O TanStack React Query gerencia cache e polling:
-- **Health**: polling a cada 10s
-- **Connectors list**: polling a cada 5s
-- **Connector detail**: polling a cada 3s
-
-## Wizard de Criação de Connector
-
-Fluxo em 4 etapas, navegáveis com botões "Voltar" e "Próximo":
-
-1. **StepSelectType**: escolhe entre source (Debezium PG, Debezium MySQL) ou sink (S3 MinIO)
-2. **StepSelectTables**: busca tabelas do banco selecionado via `/api/databases/:db/tables` e permite seleção múltipla
-3. **StepOptions**: configura snapshot mode, topic prefix, nome do connector
-4. **StepPreview**: mostra o JSON final gerado via `/api/templates/generate`. Botão "Criar" faz POST em `/api/connectors`
+- **Health e Connectors**: polling a cada 10s
+- **Connector detail**: polling a cada 10s
+- **Replication**: polling a cada 10s
 
 ## Build e Deploy
 
 ```bash
-# Desenvolvimento (hot reload na porta 5173)
+# Desenvolvimento local (hot reload, requer Node.js 20+)
 cd apps/web && npm run dev
 
-# Build produção
-cd apps/web && npm run build
-
-# Docker
-# Build automático via docker-compose.yml (service "web")
+# Docker (build automatico via docker-compose.yml, service "web")
 # Serve via nginx na porta 5173
 ```
 
@@ -89,5 +101,3 @@ cd apps/web && npm run build
 
 O `vite.config.ts` configura proxy para o BFF:
 - `/api/*` → `http://localhost:3001/api/*`
-
-Isso permite que o frontend rode standalone (`npm run dev`) sem precisar de Docker.

@@ -2,24 +2,26 @@
 
 ## Visão Geral
 
-O pipeline captura mudanças nos bancos de dados (PostgreSQL e MySQL) via Debezium, serializa em Avro, transmite pelo Redpanda e armazena no MinIO em formato JSON.
+O pipeline captura mudanças nos bancos de dados (PostgreSQL e MySQL) via Debezium, transmite pelo Redpanda e materializa em tabelas Apache Iceberg (Parquet) no MinIO, consultáveis via Trino e Superset.
 
 ## Fluxo de Dados
 
 ```
 PostgreSQL (wal_level=logical)
-  └─ Debezium PostgresConnector (pgoutput)
-       └─ Tópicos: pg.public.customers, pg.public.orders, pg.public.products
-            └─ Avro serializado (AvroConverter + Schema Registry)
+  ├─ postgres-source (Avro + envelope Debezium)
+  │    └─ Tópicos: pg.public.customers, pg.public.orders, pg.public.products
+  │
+  └─ postgres-source-iceberg (JSON flat, sem envelope)
+       └─ Tópicos: pg-iceberg.public.customers, pg-iceberg.public.orders, pg-iceberg.public.products
+            └─ Iceberg Sink → MinIO bucket "warehouse" (Parquet)
 
 MySQL (binlog ROW)
-  └─ Debezium MySqlConnector (binlog)
+  └─ mysql-source (Avro + envelope Debezium)
        └─ Tópicos: mysql.cdc_source.employees, mysql.cdc_source.departments, mysql.cdc_source.audit_log
-            └─ Avro serializado (AvroConverter + Schema Registry)
+            └─ Iceberg Sink → MinIO bucket "warehouse" (Parquet)
 
-Tópicos Redpanda
-  └─ S3 Sink Connector
-       └─ MinIO bucket "raw" (JSON, particionado por tópico/data)
+Iceberg (MinIO + JDBC Catalog)
+  └─ Trino → Superset (SQL Lab)
 ```
 
 ## Source Connectors
@@ -35,6 +37,19 @@ Tópicos Redpanda
 - **Tabelas**: `public.customers`, `public.orders`, `public.products`
 - **Snapshot mode**: `initial` (faz snapshot na primeira execução, depois só CDC)
 - **Config JSON**: `docker/connectors/register-postgres-source.json`
+
+### PostgreSQL Source (Iceberg)
+
+- **Nome**: `postgres-source-iceberg`
+- **Classe**: `io.debezium.connector.postgresql.PostgresConnector`
+- **Prefixo de tópico**: `pg-iceberg`
+- **Slot de replicação**: `debezium_iceberg_slot`
+- **Converters**: `JsonConverter` (sem schema, flat)
+- **Transforms**: `ExtractNewRecordState` (desembala o envelope Debezium no source)
+- **Tombstones**: desabilitados (`tombstones.on.delete=false`)
+- **Decimal handling**: `string` (evita encoding binário)
+- **Função**: source dedicado para o Iceberg Sink, produz JSON flat sem envelope
+- **Config JSON**: `docker/connectors/register-postgres-source-iceberg.json`
 
 ### MySQL Source
 
@@ -68,59 +83,60 @@ Para cada tópico, dois subjects são criados:
 
 Exemplo: `pg.public.customers-key`, `pg.public.customers-value`
 
-## S3 Sink Connector
+## Iceberg Sink Connectors
 
-### PostgreSQL Sink
+Os dados do CDC são materializados em tabelas Apache Iceberg no MinIO, usando o conector `io.tabular.iceberg.connect.IcebergSinkConnector`.
 
-- **Classe**: `io.confluent.connect.s3.S3SinkConnector`
-- **Topics regex**: `pg\\..*` (todos os tópicos com prefixo `pg`)
-- **Bucket**: `raw`
-- **Formato**: JSON (`io.confluent.connect.s3.format.json.JsonFormat`)
-- **Particionamento**: `DailyPartitioner` — `{topic}/YYYY-MM-dd/`
-- **Flush**: a cada 100 registros ou 60 segundos
-- **Storage**: S3 compatível (MinIO em `http://minio:9000`)
-- **Config JSON**: `docker/connectors/register-s3-sink-postgres.json`
+### Iceberg Sink PostgreSQL
+
+- **Nome**: `iceberg-sink-postgres`
+- **Topics**: `pg-iceberg.public.customers`, `pg-iceberg.public.orders`, `pg-iceberg.public.products`
+- **Tabelas Iceberg**: `iceberg_db.pg_customers`, `iceberg_db.pg_orders`, `iceberg_db.pg_products`
+- **Converters**: `JsonConverter` (lê dos tópicos JSON flat)
+- **Auto-create**: habilitado (cria tabelas Iceberg automaticamente)
+- **Schema evolution**: habilitado (adiciona colunas automaticamente)
+- **Commit interval**: 60 segundos
+- **Control topic**: `iceberg-pg-control`
+- **Config JSON**: `docker/connectors/register-iceberg-sink-postgres.json`
+
+### Iceberg Sink MySQL
+
+- **Nome**: `iceberg-sink-mysql`
+- **Topics**: `mysql.cdc_source.employees`, `mysql.cdc_source.departments`, `mysql.cdc_source.audit_log`
+- **Tabelas Iceberg**: `iceberg_db.mysql_employees`, `iceberg_db.mysql_departments`, `iceberg_db.mysql_audit_log`
+- **Converters**: `AvroConverter` + Schema Registry
+- **Config JSON**: `docker/connectors/register-iceberg-sink-mysql.json`
+
+### JDBC Catalog
+
+O metadata das tabelas Iceberg (schemas, snapshots, manifest files) é armazenado no PostgreSQL, database `iceberg_catalog`. O Trino e o Kafka Connect compartilham o mesmo catalog.
 
 ### Estrutura no MinIO
 
 ```
-raw/
-  pg.public.customers/
-    2026-08-30/
-      pg.public.customers+0+0000000000.json
-      pg.public.customers+0+0000000100.json
-  pg.public.orders/
-    2026-08-30/
-      ...
+warehouse/
+  iceberg_db/
+    pg_customers/
+      data/
+        00001-....parquet         ← dados columnar
+        00001-....parquet
+      metadata/
+        00000-....metadata.json   ← snapshot inicial
+        00001-....metadata.json   ← snapshot após commit
+    pg_orders/
+    pg_products/
 ```
 
-O nome do arquivo segue o padrão: `{topic}+{partition}+{offset}.json`
+### Schema Evolution
 
-### Payload de exemplo (JSON no MinIO)
+Com `iceberg.tables.evolve-schema-enabled=true`:
 
-```json
-{
-  "before": null,
-  "after": {
-    "id": 1,
-    "name": "Alice Silva",
-    "email": "alice@example.com",
-    "created_at": 1693526400000000,
-    "updated_at": 1693526400000000
-  },
-  "source": {
-    "version": "2.5.0.Final",
-    "connector": "postgresql",
-    "name": "pg",
-    "ts_ms": 1693526400000,
-    "db": "cdc_source",
-    "schema": "public",
-    "table": "customers"
-  },
-  "op": "r",
-  "ts_ms": 1693526400123
-}
-```
+1. O Debezium detecta um `ALTER TABLE` e produz eventos com o novo schema
+2. O Iceberg Sink detecta o campo novo e atualiza o metadata da tabela
+3. Arquivos Parquet antigos continuam intactos (campo novo = `null`)
+4. O Trino faz merge na leitura — todas as versões coexistem
+
+### Operações no Debezium
 
 - `op: "r"` = read (snapshot inicial)
 - `op: "c"` = create (INSERT)

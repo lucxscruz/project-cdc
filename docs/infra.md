@@ -67,8 +67,10 @@ Todos os containers compartilham a rede bridge `cdc-network`. Os serviços se co
 - **Imagem**: custom (`docker/kafka-connect/Dockerfile`), baseada em `debezium/connect:2.5`
 - **Porta**: `8083:8083`
 - **Plugins adicionais**:
-  - S3 Sink Connector (JARs em `s3-plugin/`)
+  - S3 Sink Connector (JARs em `s3-plugin/`, legado)
+  - Iceberg Sink Connector (`iceberg-plugin/`, v0.6.19)
   - `kafka-connect-avro-converter` (Maven)
+  - PostgreSQL JDBC driver (para Iceberg JDBC Catalog)
   - Guava + failureaccess (dependências)
 - **Converters**: `io.confluent.connect.avro.AvroConverter` (key e value)
 - **Schema Registry URL**: `http://redpanda:8081`
@@ -89,8 +91,46 @@ Todos os containers compartilham a rede bridge `cdc-network`. Os serviços se co
 #### MinIO Init
 
 - **Container**: `cdc-minio-init`
-- **Função**: cria o bucket `raw` na inicialização
+- **Função**: cria os buckets `raw` e `warehouse` na inicialização
 - **Depende de**: MinIO (healthy)
+
+### Query Engine
+
+#### Trino
+
+- **Container**: `cdc-trino`
+- **Imagem**: `trinodb/trino:latest`
+- **Porta**: `8085:8085`
+- **Catalogs**:
+  - `postgres` — acesso direto ao PostgreSQL via JDBC
+  - `mysql` — acesso direto ao MySQL via JDBC
+  - `iceberg` — tabelas Iceberg via JDBC Catalog (Postgres) + S3 (MinIO)
+- **Config**: `config/trino/config.properties`, `catalog/*.properties`
+- **Healthcheck**: `curl /v1/info` verificando `starting:false`
+- **Depende de**: Postgres, MySQL, MinIO (todos healthy)
+
+### BI / SQL Lab
+
+#### Apache Superset
+
+- **Container**: `cdc-superset`
+- **Imagem**: custom (`config/superset/Dockerfile`), baseada em `apache/superset:latest` + driver `trino`
+- **Porta**: `8088:8088`
+- **Credenciais**: `admin`/`admin`
+- **Database configurado**: "Trino (CDC)" — conexão via `trino://trino@trino:8085`
+- **Metadata**: PostgreSQL database `superset`
+- **Bootstrap**: `config/superset/bootstrap.sh` (cria admin, migra DB, registra conexão Trino)
+- **Depende de**: Postgres, Trino (ambos healthy)
+
+### Tools
+
+#### Fake Data Generator
+
+- **Container**: `cdc-fake-data`
+- **Imagem**: custom (`scripts/Dockerfile`), Python 3.12 + Faker
+- **Profile**: `tools` (não sobe com `docker compose up`)
+- **Uso**: `make fake-pg-customers ROWS=10`
+- **Conecta em**: Postgres e MySQL via rede interna
 
 ### Observabilidade
 
@@ -134,6 +174,7 @@ Todos os dados persistentes usam Docker named volumes:
 | `prometheus_data` | Prometheus |
 | `loki_data` | Loki |
 | `grafana_data` | Grafana |
+| `superset_data` | Superset |
 
 ## Mapa de Portas
 
@@ -148,6 +189,8 @@ Todos os dados persistentes usam Docker named volumes:
 | Kafka Connect | 8083 | 8083 |
 | MinIO API | 19000 | 9000 |
 | MinIO Console | 19001 | 9001 |
+| Trino | 8085 | 8085 |
+| Superset | 8088 | 8088 |
 | Prometheus | 9090 | 9090 |
 | Loki | 3100 | 3100 |
 | Grafana | 3000 | 3000 |
