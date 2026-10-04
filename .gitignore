@@ -5,3 +5,5 @@ dist/
 .DS_Store
 scripts/.venv/
 .superpowers/
+docker/gentle_nuance.json
+docker/raw_rdr_*
