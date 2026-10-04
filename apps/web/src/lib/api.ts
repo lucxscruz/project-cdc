@@ -1,8 +1,10 @@
 const BASE_URL = "/api";
 
 async function request<T>(path: string, opts?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (opts?.body) headers["Content-Type"] = "application/json";
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...opts,
   });
   if (!res.ok) {
