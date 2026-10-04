@@ -1,14 +1,60 @@
-.PHONY: help venv fake-pg-customers fake-pg-products fake-pg-orders fake-mysql-employees fake-mysql-departments fake-mysql-audit fake-all
+.PHONY: help up down restart logs status connectors venv \
+       fake-pg-customers fake-pg-products fake-pg-orders \
+       fake-mysql-employees fake-mysql-departments fake-mysql-audit fake-all
 
 PYTHON   := scripts/.venv/bin/python
 ROWS     ?= 10
 INTERVAL ?= 0.5
+COMPOSE  := docker compose -f docker/docker-compose.yml
 
 help: ## Mostra os comandos disponiveis
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
-venv: ## Cria virtualenv e instala dependencias
+# ── Plataforma ────────────────────────────────────────────────────────
+
+up: ## Sobe toda a plataforma e registra os connectors
+	@echo "Starting CDC Platform..."
+	$(COMPOSE) up -d
+	@echo "Waiting for Kafka Connect..."
+	@until curl -sf http://localhost:8083/connectors > /dev/null 2>&1; do sleep 3; done
+	@echo "Registering CDC connectors..."
+	@bash docker/connectors/register-all.sh
+	@echo ""
+	@echo "CDC Platform ready!"
+	@echo ""
+	@echo "  Web Panel:         http://localhost:5173"
+	@echo "  Superset (SQL):    http://localhost:8088  (admin/admin)"
+	@echo "  Redpanda Console:  http://localhost:8080"
+	@echo "  Grafana:           http://localhost:3000  (admin/admin)"
+	@echo "  Trino:             http://localhost:8085"
+	@echo "  MinIO Console:     http://localhost:19001  (minioadmin/minioadmin)"
+	@echo "  BFF API:           http://localhost:3001/api"
+
+down: ## Para toda a plataforma
+	@echo "Stopping CDC Platform..."
+	$(COMPOSE) down
+	@echo "CDC Platform stopped."
+
+restart: down up ## Reinicia toda a plataforma
+
+logs: ## Mostra logs dos containers (use SERVICE=nome para filtrar)
+	$(COMPOSE) logs -f $(SERVICE)
+
+status: ## Mostra status dos containers e connectors
+	@$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" | head -20
+	@echo ""
+	@echo "Connectors:"
+	@curl -s 'http://localhost:8083/connectors?expand=status' 2>/dev/null | \
+		jq -r '.[] | "  \(.status.name): \(.status.connector.state) [\(.status.tasks[0].state // "no task")]"' 2>/dev/null || \
+		echo "  Kafka Connect not available"
+
+connectors: ## Registra/re-registra os connectors CDC
+	@bash docker/connectors/register-all.sh
+
+# ── Virtualenv ────────────────────────────────────────────────────────
+
+venv: ## Cria virtualenv e instala dependencias para dados fake
 	python3 -m venv scripts/.venv
 	scripts/.venv/bin/pip install -q -r scripts/requirements.txt
 	@echo "Virtualenv pronta em scripts/.venv"

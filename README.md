@@ -151,16 +151,17 @@ graph TD
 ### Pré-requisitos
 
 - Docker e Docker Compose
+- Make
 - Node.js 20+ (para desenvolvimento local)
 - Python 3.10+ (para geração de dados fake)
 
 ### 1. Subir a plataforma
 
 ```bash
-./start.sh
+make up
 ```
 
-Isso inicia todos os containers e registra os connectors CDC automaticamente.
+Isso inicia todos os containers, aguarda o Kafka Connect ficar healthy e registra os connectors CDC automaticamente.
 
 ### 2. Criar o virtualenv para dados fake
 
@@ -181,9 +182,6 @@ make fake-pg-orders ROWS=15
 make fake-mysql-employees ROWS=20
 make fake-mysql-departments ROWS=5
 make fake-mysql-audit ROWS=10
-
-# Ver todos os comandos disponíveis
-make help
 ```
 
 | Variável | Default | Descrição |
@@ -191,10 +189,41 @@ make help
 | `ROWS` | 10 | Quantidade de linhas por tabela |
 | `INTERVAL` | 0.5 | Segundos entre cada insert (útil para observar CDC em tempo real) |
 
-### 4. Parar a plataforma
+### 4. Verificar status
 
 ```bash
-./stop.sh
+make status
+```
+
+Mostra o estado dos containers e dos connectors CDC.
+
+### 5. Parar a plataforma
+
+```bash
+make down
+```
+
+### Comandos disponíveis
+
+```bash
+make help
+```
+
+```
+  up                        Sobe toda a plataforma e registra os connectors
+  down                      Para toda a plataforma
+  restart                   Reinicia toda a plataforma
+  logs                      Mostra logs dos containers (use SERVICE=nome para filtrar)
+  status                    Mostra status dos containers e connectors
+  connectors                Registra/re-registra os connectors CDC
+  venv                      Cria virtualenv e instala dependencias para dados fake
+  fake-pg-customers         Insere customers fake no Postgres (ROWS=10 INTERVAL=0.5)
+  fake-pg-products          Insere products fake no Postgres
+  fake-pg-orders            Insere orders fake no Postgres
+  fake-mysql-employees      Insere employees fake no MySQL
+  fake-mysql-departments    Insere departments fake no MySQL
+  fake-mysql-audit          Insere audit_log fake no MySQL
+  fake-all                  Insere dados em todas as tabelas (Postgres + MySQL)
 ```
 
 ## URLs e Credenciais
