@@ -10,12 +10,6 @@ scrape_configs:
           service: "redpanda"
     metrics_path: /public_metrics
 
-  - job_name: "kafka-connect"
-    static_configs:
-      - targets: ["kafka-connect:9405"]
-        labels:
-          service: "kafka-connect"
-
   - job_name: "minio"
     metrics_path: /minio/v2/metrics/cluster
     static_configs:

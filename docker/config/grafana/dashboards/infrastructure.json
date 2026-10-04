@@ -5,45 +5,34 @@
   "timezone": "browser",
   "panels": [
     {
-      "title": "Kafka Messages In (rate/min)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "title": "Redpanda Brokers",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(kafka_server_brokertopicmetrics_messagesin_total[1m])",
-          "legendFormat": "messages/min"
-        }
-      ]
-    },
-    {
-      "title": "Kafka Bytes In (rate/min)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "rate(kafka_server_brokertopicmetrics_bytesin_total[1m])",
-          "legendFormat": "bytes/min"
+          "expr": "redpanda_cluster_brokers",
+          "legendFormat": "brokers"
         }
       ]
     },
     {
       "title": "MinIO Storage Used",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 8 },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
       "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
       "targets": [
         {
           "expr": "minio_cluster_usage_total_bytes",
-          "legendFormat": "total bytes"
+          "legendFormat": "used"
         }
       ]
     },
     {
-      "title": "MinIO Objects Count",
+      "title": "MinIO Objects",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 8 },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
       "datasource": "Prometheus",
       "targets": [
         {
@@ -53,14 +42,69 @@
       ]
     },
     {
-      "title": "Kafka Connect Tasks Running",
+      "title": "MinIO Buckets",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 8 },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "kafka_connect_connector_task_status",
-          "legendFormat": "{{connector}}-{{task}}"
+          "expr": "minio_cluster_usage_buckets_total",
+          "legendFormat": "buckets"
+        }
+      ]
+    },
+    {
+      "title": "Redpanda Disk Bytes Written (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "expr": "rate(redpanda_host_diskstats_bytes_written[1m])",
+          "legendFormat": "disk write"
+        }
+      ]
+    },
+    {
+      "title": "Redpanda Disk Bytes Read (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "expr": "rate(redpanda_host_diskstats_bytes_read[1m])",
+          "legendFormat": "disk read"
+        }
+      ]
+    },
+    {
+      "title": "Redpanda Network In/Out (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        {
+          "expr": "rate(redpanda_host_netstat_bytes_received[1m])",
+          "legendFormat": "received"
+        },
+        {
+          "expr": "rate(redpanda_host_netstat_bytes_sent[1m])",
+          "legendFormat": "sent"
+        }
+      ]
+    },
+    {
+      "title": "Redpanda RPC Connections",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "redpanda_rpc_active_connections",
+          "legendFormat": "active connections"
         }
       ]
     }

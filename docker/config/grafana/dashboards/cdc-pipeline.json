@@ -5,50 +5,101 @@
   "timezone": "browser",
   "panels": [
     {
-      "title": "Connector Status",
+      "title": "Topics",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 0 },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "kafka_connect_connector_status",
-          "legendFormat": "{{connector}}"
+          "expr": "redpanda_cluster_topics",
+          "legendFormat": "topics"
         }
       ]
     },
     {
-      "title": "Source Records Written (rate/min)",
+      "title": "Partitions",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "redpanda_cluster_partitions",
+          "legendFormat": "partitions"
+        }
+      ]
+    },
+    {
+      "title": "Consumer Groups",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "count(redpanda_kafka_consumer_group_consumers)",
+          "legendFormat": "groups"
+        }
+      ]
+    },
+    {
+      "title": "Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "redpanda_application_uptime_seconds_total",
+          "legendFormat": "uptime"
+        }
+      ]
+    },
+    {
+      "title": "Records Produced (rate/min)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(kafka_connect_source_task_source_record_write_total[1m])",
-          "legendFormat": "{{connector}}"
+          "expr": "rate(redpanda_kafka_records_produced_total[1m]) * 60",
+          "legendFormat": "records/min"
         }
       ]
     },
     {
-      "title": "Sink Records Written (rate/min)",
+      "title": "Records Fetched (rate/min)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(kafka_connect_sink_task_sink_record_send_total[1m])",
-          "legendFormat": "{{connector}}"
+          "expr": "rate(redpanda_kafka_records_fetched_total[1m]) * 60",
+          "legendFormat": "records/min"
         }
       ]
     },
     {
-      "title": "Connect Errors (last 30m)",
+      "title": "Request Bytes (rate/min)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
       "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
       "targets": [
         {
-          "expr": "rate(kafka_connect_connector_task_total_errors_logged[5m])",
-          "legendFormat": "{{connector}}-task-{{task}}"
+          "expr": "rate(redpanda_kafka_request_bytes_total[1m])",
+          "legendFormat": "{{redpanda_cmd}}"
+        }
+      ]
+    },
+    {
+      "title": "Request Latency p99",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": "Prometheus",
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(redpanda_kafka_request_latency_seconds_bucket[5m]))",
+          "legendFormat": "p99"
         }
       ]
     }
