@@ -151,9 +151,7 @@ graph TD
 ### Pré-requisitos
 
 - Docker e Docker Compose
-- Make
-- Node.js 20+ (para desenvolvimento local)
-- Python 3.10+ (para geração de dados fake)
+- Make (pré-instalado no macOS e na maioria das distros Linux)
 
 ### 1. Subir a plataforma
 
@@ -163,13 +161,7 @@ make up
 
 Isso inicia todos os containers, aguarda o Kafka Connect ficar healthy e registra os connectors CDC automaticamente.
 
-### 2. Criar o virtualenv para dados fake
-
-```bash
-make venv
-```
-
-### 3. Inserir dados de teste
+### 2. Inserir dados de teste
 
 ```bash
 # Inserir em todas as tabelas (Postgres + MySQL)
@@ -216,7 +208,6 @@ make help
   logs                      Mostra logs dos containers (use SERVICE=nome para filtrar)
   status                    Mostra status dos containers e connectors
   connectors                Registra/re-registra os connectors CDC
-  venv                      Cria virtualenv e instala dependencias para dados fake
   fake-pg-customers         Insere customers fake no Postgres (ROWS=10 INTERVAL=0.5)
   fake-pg-products          Insere products fake no Postgres
   fake-pg-orders            Insere orders fake no Postgres
@@ -363,7 +354,9 @@ O design usa tema escuro, CSS custom properties e tipografia Geist.
 - **Grafana** (`:3000`) — dashboards de CDC Pipeline, Infrastructure e Logs Explorer
 - **Loki + Promtail** — agregação de logs dos containers
 
-## Desenvolvimento
+## Desenvolvimento local
+
+Para desenvolvimento com hot reload, é necessário Node.js 20+:
 
 ```bash
 # BFF (hot reload)
@@ -374,9 +367,6 @@ cd apps/web && npm run dev
 
 # Testes do BFF
 cd apps/bff && npm test
-
-# Gerar dados fake
-make fake-pg-customers ROWS=50 INTERVAL=0
 ```
 
 ## Portas

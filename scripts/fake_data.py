@@ -11,23 +11,29 @@ import time
 import sys
 
 from faker import Faker
+import os
 import psycopg2
 import mysql.connector
 
 fake = Faker("pt_BR")
 
+PG_HOST = os.environ.get("PG_HOST", "localhost")
+PG_PORT = int(os.environ.get("PG_PORT", "5432"))
+MYSQL_HOST = os.environ.get("MYSQL_HOST", "localhost")
+MYSQL_PORT = int(os.environ.get("MYSQL_PORT", "3307"))
+
 # ── Conexões ─────────────────────────────────────────────────────────
 
 def pg_conn():
     return psycopg2.connect(
-        host="localhost", port=5432,
+        host=PG_HOST, port=PG_PORT,
         user="postgres", password="postgres",
         dbname="cdc_source",
     )
 
 def mysql_conn():
     return mysql.connector.connect(
-        host="localhost", port=3307,
+        host=MYSQL_HOST, port=MYSQL_PORT,
         user="root", password="root",
         database="cdc_source",
     )

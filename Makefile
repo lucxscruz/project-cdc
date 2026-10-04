@@ -1,11 +1,11 @@
-.PHONY: help up down restart logs status connectors venv \
+.PHONY: help up down restart logs status connectors \
        fake-pg-customers fake-pg-products fake-pg-orders \
        fake-mysql-employees fake-mysql-departments fake-mysql-audit fake-all
 
-PYTHON   := scripts/.venv/bin/python
 ROWS     ?= 10
 INTERVAL ?= 0.5
 COMPOSE  := docker compose -f docker/docker-compose.yml
+FAKE     := $(COMPOSE) run --rm --build fake-data
 
 help: ## Mostra os comandos disponiveis
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -52,41 +52,34 @@ status: ## Mostra status dos containers e connectors
 connectors: ## Registra/re-registra os connectors CDC
 	@bash docker/connectors/register-all.sh
 
-# ── Virtualenv ────────────────────────────────────────────────────────
-
-venv: ## Cria virtualenv e instala dependencias para dados fake
-	python3 -m venv scripts/.venv
-	scripts/.venv/bin/pip install -q -r scripts/requirements.txt
-	@echo "Virtualenv pronta em scripts/.venv"
-
 # ── PostgreSQL ────────────────────────────────────────────────────────
 
 fake-pg-customers: ## Insere customers fake no Postgres (ROWS=10 INTERVAL=0.5)
-	$(PYTHON) scripts/fake_data.py --db postgres --table customers --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db postgres --table customers --rows $(ROWS) --interval $(INTERVAL)
 
 fake-pg-products: ## Insere products fake no Postgres
-	$(PYTHON) scripts/fake_data.py --db postgres --table products --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db postgres --table products --rows $(ROWS) --interval $(INTERVAL)
 
 fake-pg-orders: ## Insere orders fake no Postgres
-	$(PYTHON) scripts/fake_data.py --db postgres --table orders --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db postgres --table orders --rows $(ROWS) --interval $(INTERVAL)
 
 # ── MySQL ─────────────────────────────────────────────────────────────
 
 fake-mysql-employees: ## Insere employees fake no MySQL
-	$(PYTHON) scripts/fake_data.py --db mysql --table employees --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db mysql --table employees --rows $(ROWS) --interval $(INTERVAL)
 
 fake-mysql-departments: ## Insere departments fake no MySQL
-	$(PYTHON) scripts/fake_data.py --db mysql --table departments --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db mysql --table departments --rows $(ROWS) --interval $(INTERVAL)
 
 fake-mysql-audit: ## Insere audit_log fake no MySQL
-	$(PYTHON) scripts/fake_data.py --db mysql --table audit_log --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db mysql --table audit_log --rows $(ROWS) --interval $(INTERVAL)
 
 # ── Atalhos ───────────────────────────────────────────────────────────
 
 fake-all: ## Insere dados em todas as tabelas (Postgres + MySQL)
-	$(PYTHON) scripts/fake_data.py --db postgres --table customers --rows $(ROWS) --interval $(INTERVAL)
-	$(PYTHON) scripts/fake_data.py --db postgres --table products  --rows $(ROWS) --interval $(INTERVAL)
-	$(PYTHON) scripts/fake_data.py --db postgres --table orders    --rows $(ROWS) --interval $(INTERVAL)
-	$(PYTHON) scripts/fake_data.py --db mysql    --table employees --rows $(ROWS) --interval $(INTERVAL)
-	$(PYTHON) scripts/fake_data.py --db mysql    --table departments --rows $(ROWS) --interval $(INTERVAL)
-	$(PYTHON) scripts/fake_data.py --db mysql    --table audit_log --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db postgres --table customers --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db postgres --table products  --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db postgres --table orders    --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db mysql    --table employees --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db mysql    --table departments --rows $(ROWS) --interval $(INTERVAL)
+	$(FAKE) --db mysql    --table audit_log --rows $(ROWS) --interval $(INTERVAL)

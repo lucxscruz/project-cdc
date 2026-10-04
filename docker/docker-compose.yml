@@ -359,6 +359,23 @@ services:
     networks:
       - cdc-network
 
+  # ============================================================
+  # TOOLS (fake data generator)
+  # ============================================================
+  fake-data:
+    build:
+      context: ../scripts
+      dockerfile: Dockerfile
+    container_name: cdc-fake-data
+    environment:
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+    profiles: ["tools"]
+    networks:
+      - cdc-network
+
 volumes:
   postgres_data:
   mysql_data:
