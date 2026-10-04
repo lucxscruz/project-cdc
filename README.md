@@ -1,6 +1,6 @@
 # CDC Platform
 
-Plataforma de Change Data Capture (CDC) que captura mudanças em bancos PostgreSQL e MySQL via Debezium, transmite por Redpanda (Kafka), materializa em tabelas Iceberg (Parquet) no MinIO e disponibiliza para consulta via Trino e Apache Superset.
+Projeto de captura de dados (CDC) em bancos PostgreSQL e MySQL via Debezium, transmitindo dados em streaming via Redpanda, materialização em tabelas Iceberg no MinIO e consumo federado via Trino e Superset.
 
 ## Arquitetura
 
