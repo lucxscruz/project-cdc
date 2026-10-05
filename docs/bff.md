@@ -124,6 +124,16 @@ Todas as variáveis têm defaults para rodar dentro do Docker Compose:
 }
 ```
 
+### Lakehouse (`/api/lakehouse`)
+
+| Método | Path | Descrição |
+|--------|------|-----------|
+| GET | `/api/lakehouse/silver` | Lista views Silver existentes |
+| POST | `/api/lakehouse/silver/generate` | Gera view Silver para uma tabela Bronze. Body: `{ table, idColumn? }` |
+| POST | `/api/lakehouse/silver/generate-all` | Gera views Silver para todas as tabelas Bronze automaticamente |
+
+O `generate-all` detecta a PK e os campos disponíveis (`__source_ts_ms`, `__deleted`) de cada tabela e cria a view correspondente no schema `iceberg.silver`. Comunica com o Trino via REST API (`TRINO_URL`).
+
 ## Services
 
 ### HealthChecker

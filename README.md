@@ -289,8 +289,11 @@ SELECT c.name AS customer, e.department
 FROM postgres.public.customers c
 JOIN mysql.cdc_source.employees e ON c.id = e.id;
 
--- Dados do lakehouse (Iceberg/Parquet)
+-- Dados do lakehouse — Bronze (histórico completo)
 SELECT * FROM iceberg.iceberg_db.pg_customers;
+
+-- Dados do lakehouse — Silver (estado atual, sem deletados)
+SELECT * FROM iceberg.silver.pg_customers;
 ```
 
 ### Catalogs disponíveis no Trino
@@ -300,6 +303,15 @@ SELECT * FROM iceberg.iceberg_db.pg_customers;
 | `postgres` | PostgreSQL (tempo real) | JDBC |
 | `mysql` | MySQL (tempo real) | JDBC |
 | `iceberg` | MinIO via JDBC Catalog | Iceberg (Parquet) |
+
+### Schemas do Iceberg
+
+| Schema | Conteúdo |
+|---|---|
+| `iceberg.iceberg_db` | **Bronze** — todos os eventos CDC (append-only, inclui deletados com `__deleted=true`) |
+| `iceberg.silver` | **Silver** — estado atual (deduplicado por PK, sem deletados) |
+
+As views Silver são geradas automaticamente via `POST /api/lakehouse/silver/generate-all`.
 
 ### Schema Evolution
 

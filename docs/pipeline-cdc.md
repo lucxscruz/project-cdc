@@ -128,12 +128,53 @@ Com `iceberg.tables.evolve-schema-enabled=true`:
 3. Arquivos Parquet antigos continuam intactos (campo novo = `null`)
 4. O Trino faz merge na leitura — todas as versões coexistem
 
+### Delete Rewrite Mode
+
+Os connectors usam `delete.handling.mode=rewrite` — DELETEs não são descartados, são produzidos com campos extras:
+
+- `__deleted` — `"true"` para registros deletados, `"false"` para os demais
+- `__op` — operação do Debezium (`c`=create, `u`=update, `d`=delete, `r`=read/snapshot)
+- `__source_ts_ms` — timestamp do evento no banco de origem (para ordenação)
+
+Isso permite que a camada Bronze mantenha o histórico completo de todas as operações.
+
 ### Operações no Debezium
 
 - `op: "r"` = read (snapshot inicial)
 - `op: "c"` = create (INSERT)
 - `op: "u"` = update (UPDATE)
 - `op: "d"` = delete (DELETE)
+
+### Camada Silver (estado atual)
+
+A camada Bronze (Iceberg) armazena todos os eventos CDC em modo append-only. Para obter o **estado atual** (equivalente ao banco de origem), views Silver são criadas automaticamente via `POST /api/lakehouse/silver/generate-all`.
+
+Cada view Silver aplica:
+
+1. `ROW_NUMBER() OVER (PARTITION BY id ORDER BY __source_ts_ms DESC)` — pega o evento mais recente por PK
+2. `WHERE __deleted IS NULL OR __deleted != 'true'` — filtra registros deletados
+
+```
+Bronze (iceberg.iceberg_db.pg_customers):
+  id=57, name="Test", __deleted="false", __op="c"   ← INSERT
+  id=57, name="",     __deleted="true",  __op="d"   ← DELETE
+  id=58, name="Ana",  __deleted="false", __op="c"   ← INSERT
+
+Silver (iceberg.silver.pg_customers):
+  id=58, name="Ana"   ← apenas registros vivos
+```
+
+Consulta no Superset/Trino:
+
+```sql
+-- Bronze (histórico completo)
+SELECT * FROM iceberg.iceberg_db.pg_customers;
+
+-- Silver (estado atual)
+SELECT * FROM iceberg.silver.pg_customers;
+```
+
+As views são geradas automaticamente pelo BFF e podem ser regeneradas a qualquer momento sem perda de dados.
 
 ## Snapshot Incremental
 
