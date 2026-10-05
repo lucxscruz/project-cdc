@@ -92,6 +92,7 @@ Todas as variáveis têm defaults para rodar dentro do Docker Compose:
 | POST | `/api/connectors/:name/restart` | Reinicia connector |
 | POST | `/api/connectors/:name/pause` | Pausa connector |
 | POST | `/api/connectors/:name/resume` | Resume connector |
+| POST | `/api/connectors/:name/snapshot` | Trigga snapshot incremental de uma tabela. Body: `{ table: "public.tabela" }` |
 
 ### Databases (`/api/databases`)
 
@@ -106,7 +107,7 @@ Todas as variáveis têm defaults para rodar dentro do Docker Compose:
 
 | Método | Path | Descrição |
 |--------|------|-----------|
-| GET | `/api/templates` | Lista templates disponíveis (debezium-postgres, debezium-mysql, s3-sink-minio) |
+| GET | `/api/templates` | Lista templates disponíveis (debezium-postgres, debezium-mysql) |
 | POST | `/api/templates/generate` | Gera config de connector a partir de template |
 
 **Body POST /api/templates/generate:**
@@ -143,7 +144,7 @@ Abre conexões diretas com PostgreSQL (via `pg`) e MySQL (via `mysql2`) para que
 
 ### TemplateEngine
 
-Gera configs de connectors a partir de 3 templates hardcoded. Cada template preenche os campos necessários (host, port, user, tabelas, etc.) com base nos parâmetros recebidos.
+Gera configs de source connectors a partir de templates hardcoded (debezium-postgres, debezium-mysql). Cada template preenche os campos necessários (host, port, user, tabelas, etc.) com base nos parâmetros recebidos. Os sinks Iceberg são criados diretamente pelo frontend.
 
 ## Build e Deploy
 

@@ -1,4 +1,7 @@
 import { FastifyInstance } from "fastify";
+import pg from "pg";
+import { config } from "../config.js";
+import { randomUUID } from "crypto";
 
 export async function connectorRoutes(app: FastifyInstance) {
   app.get("/", async () => {
@@ -44,5 +47,31 @@ export async function connectorRoutes(app: FastifyInstance) {
     const { name } = req.params as { name: string };
     await app.kafkaConnectClient.resume(name);
     return reply.status(204).send();
+  });
+
+  app.post("/:name/snapshot", async (req, reply) => {
+    const { name } = req.params as { name: string };
+    const { table } = req.body as { table: string };
+
+    if (!table) {
+      return reply.status(400).send({ error: "table is required" });
+    }
+
+    const client = new pg.Client(config.postgres);
+    await client.connect();
+    try {
+      await client.query(
+        `INSERT INTO debezium_signal (id, type, data) VALUES ($1, $2, $3)`,
+        [
+          randomUUID(),
+          "execute-snapshot",
+          JSON.stringify({ "data-collections": [table] }),
+        ],
+      );
+    } finally {
+      await client.end();
+    }
+
+    return reply.status(202).send({ message: `Snapshot triggered for ${table}` });
   });
 }

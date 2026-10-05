@@ -48,6 +48,11 @@ export const api = {
       request(`/connectors/${name}/pause`, { method: "POST" }),
     resume: (name: string) =>
       request(`/connectors/${name}/resume`, { method: "POST" }),
+    snapshot: (name: string, table: string) =>
+      request<{ message: string }>(`/connectors/${name}/snapshot`, {
+        method: "POST",
+        body: JSON.stringify({ table }),
+      }),
   },
 
   databases: {

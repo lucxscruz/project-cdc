@@ -29,7 +29,7 @@ export function ConnectorDetail() {
     <>
       <div className="cabecalho">
         <div>
-          <Link to="/connectors" className="voltar">&larr; Connectors</Link>
+          <Link to="/sources" className="voltar">&larr; Voltar</Link>
           <h1 style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {connector.name}
             <span className={`badge ${stateBadge[connector.state] ?? "quiet"}`}>{connector.state}</span>

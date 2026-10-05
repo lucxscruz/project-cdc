@@ -67,7 +67,6 @@ Todos os containers compartilham a rede bridge `cdc-network`. Os serviços se co
 - **Imagem**: custom (`docker/kafka-connect/Dockerfile`), baseada em `debezium/connect:2.5`
 - **Porta**: `8083:8083`
 - **Plugins adicionais**:
-  - S3 Sink Connector (JARs em `s3-plugin/`, legado)
   - Iceberg Sink Connector (`iceberg-plugin/`, v0.6.19)
   - `kafka-connect-avro-converter` (Maven)
   - PostgreSQL JDBC driver (para Iceberg JDBC Catalog)

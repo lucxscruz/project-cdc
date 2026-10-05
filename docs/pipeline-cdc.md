@@ -8,37 +8,28 @@ O pipeline captura mudanças nos bancos de dados (PostgreSQL e MySQL) via Debezi
 
 ```
 PostgreSQL (wal_level=logical)
-  ├─ postgres-source (Avro + envelope Debezium)
-  │    └─ Tópicos: pg.public.customers, pg.public.orders, pg.public.products
-  │
   └─ postgres-source-iceberg (JSON flat, sem envelope)
-       └─ Tópicos: pg-iceberg.public.customers, pg-iceberg.public.orders, pg-iceberg.public.products
-            └─ Iceberg Sink → MinIO bucket "warehouse" (Parquet)
+       └─ Tópicos: pg-iceberg.public.*
+            ├─ iceberg-sink-pg-customers → MinIO warehouse (Parquet)
+            ├─ iceberg-sink-pg-orders    → MinIO warehouse (Parquet)
+            └─ iceberg-sink-pg-products  → MinIO warehouse (Parquet)
 
 MySQL (binlog ROW)
   └─ mysql-source (Avro + envelope Debezium)
-       └─ Tópicos: mysql.cdc_source.employees, mysql.cdc_source.departments, mysql.cdc_source.audit_log
-            └─ Iceberg Sink → MinIO bucket "warehouse" (Parquet)
+       └─ Tópicos: mysql.cdc_source.*
+            ├─ iceberg-sink-mysql-employees    → MinIO warehouse (Parquet)
+            ├─ iceberg-sink-mysql-departments  → MinIO warehouse (Parquet)
+            └─ iceberg-sink-mysql-audit_log    → MinIO warehouse (Parquet)
 
 Iceberg (MinIO + JDBC Catalog)
   └─ Trino → Superset (SQL Lab)
 ```
 
+Cada tabela tem seu próprio sink isolado — falha em uma não afeta as demais.
+
 ## Source Connectors
 
 ### PostgreSQL Source
-
-- **Classe**: `io.debezium.connector.postgresql.PostgresConnector`
-- **Plugin de replicação**: `pgoutput` (nativo do PG 10+)
-- **Publication**: `debezium_publication` (ALL TABLES)
-- **Slot de replicação**: `debezium_slot`
-- **Prefixo de tópico**: `pg`
-- **Schema incluído**: `public`
-- **Tabelas**: `public.customers`, `public.orders`, `public.products`
-- **Snapshot mode**: `initial` (faz snapshot na primeira execução, depois só CDC)
-- **Config JSON**: `docker/connectors/register-postgres-source.json`
-
-### PostgreSQL Source (Iceberg)
 
 - **Nome**: `postgres-source-iceberg`
 - **Classe**: `io.debezium.connector.postgresql.PostgresConnector`
@@ -49,6 +40,7 @@ Iceberg (MinIO + JDBC Catalog)
 - **Tombstones**: desabilitados (`tombstones.on.delete=false`)
 - **Decimal handling**: `string` (evita encoding binário)
 - **Função**: source dedicado para o Iceberg Sink, produz JSON flat sem envelope
+- **Signal table**: `public.debezium_signal` (para snapshot incremental)
 - **Config JSON**: `docker/connectors/register-postgres-source-iceberg.json`
 
 ### MySQL Source
@@ -85,27 +77,27 @@ Exemplo: `pg.public.customers-key`, `pg.public.customers-value`
 
 ## Iceberg Sink Connectors
 
-Os dados do CDC são materializados em tabelas Apache Iceberg no MinIO, usando o conector `io.tabular.iceberg.connect.IcebergSinkConnector`.
+Os dados do CDC são materializados em tabelas Apache Iceberg no MinIO, usando o conector `io.tabular.iceberg.connect.IcebergSinkConnector`. Cada tabela tem seu próprio sink isolado — falha em uma não afeta as demais.
 
-### Iceberg Sink PostgreSQL
+### Sinks individuais
 
-- **Nome**: `iceberg-sink-postgres`
-- **Topics**: `pg-iceberg.public.customers`, `pg-iceberg.public.orders`, `pg-iceberg.public.products`
-- **Tabelas Iceberg**: `iceberg_db.pg_customers`, `iceberg_db.pg_orders`, `iceberg_db.pg_products`
-- **Converters**: `JsonConverter` (lê dos tópicos JSON flat)
+| Sink | Tópico | Tabela Iceberg | Converter |
+|---|---|---|---|
+| `iceberg-sink-pg-customers` | `pg-iceberg.public.customers` | `iceberg_db.pg_customers` | JSON |
+| `iceberg-sink-pg-orders` | `pg-iceberg.public.orders` | `iceberg_db.pg_orders` | JSON |
+| `iceberg-sink-pg-products` | `pg-iceberg.public.products` | `iceberg_db.pg_products` | JSON |
+| `iceberg-sink-mysql-employees` | `mysql.cdc_source.employees` | `iceberg_db.mysql_employees` | Avro |
+| `iceberg-sink-mysql-departments` | `mysql.cdc_source.departments` | `iceberg_db.mysql_departments` | Avro |
+| `iceberg-sink-mysql-audit_log` | `mysql.cdc_source.audit_log` | `iceberg_db.mysql_audit_log` | Avro |
+
+Novos sinks são criados pela aba **Sinks** do painel web, que gera a config Iceberg automaticamente vinculada ao source selecionado.
+
+### Configuração comum dos sinks
+
 - **Auto-create**: habilitado (cria tabelas Iceberg automaticamente)
 - **Schema evolution**: habilitado (adiciona colunas automaticamente)
 - **Commit interval**: 60 segundos
-- **Control topic**: `iceberg-pg-control`
-- **Config JSON**: `docker/connectors/register-iceberg-sink-postgres.json`
-
-### Iceberg Sink MySQL
-
-- **Nome**: `iceberg-sink-mysql`
-- **Topics**: `mysql.cdc_source.employees`, `mysql.cdc_source.departments`, `mysql.cdc_source.audit_log`
-- **Tabelas Iceberg**: `iceberg_db.mysql_employees`, `iceberg_db.mysql_departments`, `iceberg_db.mysql_audit_log`
-- **Converters**: `AvroConverter` + Schema Registry
-- **Config JSON**: `docker/connectors/register-iceberg-sink-mysql.json`
+- **Control topic**: individual por sink (`iceberg-control-pg-customers`, etc.)
 
 ### JDBC Catalog
 
@@ -142,6 +134,19 @@ Com `iceberg.tables.evolve-schema-enabled=true`:
 - `op: "c"` = create (INSERT)
 - `op: "u"` = update (UPDATE)
 - `op: "d"` = delete (DELETE)
+
+## Snapshot Incremental
+
+Para capturar dados que já existiam em uma tabela antes de adicioná-la ao CDC, o Debezium suporta snapshot incremental via signal table.
+
+A tabela `public.debezium_signal` no `cdc_source` é monitorada pelo Debezium. Um INSERT nela com `type: "execute-snapshot"` trigga a captura dos dados existentes sem parar o streaming:
+
+```sql
+INSERT INTO debezium_signal (id, type, data)
+VALUES (gen_random_uuid()::text, 'execute-snapshot', '{"data-collections": ["public.nova_tabela"]}');
+```
+
+No painel web, o botão ↻ na aba Sinks faz isso automaticamente via `POST /api/connectors/:name/snapshot`.
 
 ## Registro de Connectors
 

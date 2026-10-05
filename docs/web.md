@@ -22,10 +22,10 @@ apps/web/
     index.css          # Design system (CSS custom properties)
     pages/
       Dashboard.tsx    # KPIs dos connectors e health dos servicos
-      Connectors.tsx   # Lista de connectors com acoes
-      ConnectorDetail.tsx  # Config JSON, tasks, status
-      NewConnector.tsx     # Wizard de criacao em 4 etapas
-      Replication.tsx      # Gestao de tabelas replicadas por source
+      Sources.tsx      # Lista e gerenciamento dos source connectors
+      NewSource.tsx    # Wizard de criacao de source em 4 etapas
+      ConnectorDetail.tsx  # Config JSON, tasks, status de qualquer connector
+      Sinks.tsx        # Gestao dos sinks Iceberg por tabela
       Observability.tsx    # Dashboards Grafana embarcados
     components/
       layout/
@@ -38,10 +38,9 @@ apps/web/
       connectors/
         ConnectorActions.tsx  # Botoes de acao (pause, resume, restart, delete)
       wizard/
-        StepSelectType.tsx     # Etapa 1: selecionar tipo (source/sink)
-        StepSelectTables.tsx   # Etapa 2: selecionar tabelas
-        StepOptions.tsx        # Etapa 3: configurar opcoes
-        StepPreview.tsx        # Etapa 4: preview e confirmar
+        StepSelectTables.tsx   # Selecionar tabelas do banco
+        StepOptions.tsx        # Configurar opcoes (nome, prefix, snapshot mode)
+        StepPreview.tsx        # Preview e confirmar config JSON
     lib/
       api.ts           # Fetch wrapper para o BFF
 ```
@@ -51,41 +50,52 @@ apps/web/
 | Path | Pagina | Descricao |
 |------|--------|-----------|
 | `/` | Dashboard | KPIs (total, running, paused, failed) e health dos servicos |
-| `/connectors` | Connectors | Tabela densa com badges de status e acoes |
-| `/connectors/:name` | ConnectorDetail | Config JSON, lista de tasks, acoes |
-| `/connectors/new` | NewConnector | Wizard de criacao de connector em 4 passos |
-| `/replication` | Replication | Tabelas replicadas por source, com acoes por tabela |
+| `/sources` | Sources | Lista dos source connectors com acoes |
+| `/sources/new` | NewSource | Wizard de criacao de source (PostgreSQL ou MySQL) |
+| `/connectors/:name` | ConnectorDetail | Config JSON, lista de tasks, acoes de qualquer connector |
+| `/sinks` | Sinks | Sinks Iceberg por tabela, com acoes individuais |
 | `/observability` | Observability | Dashboards Grafana embarcados com tabs |
 
 ## Design System
 
-O frontend usa CSS custom properties ao inves de Tailwind. O design system esta definido em `src/index.css`:
+O frontend usa CSS custom properties. O design system esta definido em `src/index.css`:
 
 - **Tema escuro** como padrao (`data-theme="escuro"`)
 - **Tema claro** via toggle no topbar (persistido em localStorage)
 - **Tipografia**: Geist Sans + Geist Mono (via CDN)
 - **Cores**: `--primary: #FE3E6D`, `--ok`, `--warn`, `--err`, `--info`
-- **Componentes CSS**: `.shell`, `.sidebar`, `.topbar`, `.kpi`, `.painel`, `.densa`, `.badge`, `.acao`, `.selector`, etc.
+- **Componentes CSS**: `.shell`, `.sidebar`, `.topbar`, `.kpi`, `.painel`, `.densa`, `.badge`, `.acao`, `.acao-icone`, `.selector`, etc.
 
-## Pagina Replication
+## Pagina Sources
 
-Gerencia a replicacao de tabelas individualmente por source connector:
+Gerencia os source connectors Debezium:
 
-- **Tabelas replicando**: badge verde, botoes de pausar (⏸) e remover (✕)
-- **Tabelas pausadas**: badge amarelo, botoes de retomar (▶) e remover (✕)
-- **Tabelas disponiveis**: botao de adicionar (+)
-- **Adicionar tabela**: botao no header abre fluxo para selecionar source e tabelas
-- **Detalhes da conexao**: toggle com host, porta, user, snapshot mode, slot, plugin
-- **Estado de pausa**: persistido em localStorage para diferenciar de "nunca adicionada"
+- Lista apenas connectors do tipo `source`
+- Botao **"Novo Source"** abre wizard com PostgreSQL e MySQL
+- Wizard em 4 etapas: tipo → tabelas → opcoes → preview
+- Acoes por source: pause, resume, restart, delete
+
+## Pagina Sinks
+
+Gerencia os sinks Iceberg individualmente por tabela:
+
+- **Tabelas replicando**: nome do sink atrelado, badge de status, acoes por tabela
+- **Botao ↻** (snapshot): trigga snapshot incremental via signal table do Debezium
+- **Botao ⏸** (pausar): remove tabela da replicacao (estado salvo em localStorage)
+- **Botao ✕** (remover): remove permanentemente
+- **Botao ▶** (retomar): re-adiciona tabela pausada
+- **Botao "+ Novo Sink"**: seleciona source → seleciona tabelas → cria sink Iceberg individual por tabela automaticamente
+- **Detalhes da conexao**: toggle com host, porta, user, snapshot mode, slot, plugin, signal table
+
+Cada sink Iceberg e isolado — falha em uma tabela nao afeta as demais.
 
 ## Comunicacao com o BFF
 
 Todas as chamadas passam pelo wrapper `lib/api.ts` que faz `fetch` para `/api` (proxy em dev, nginx em producao).
 
 O TanStack React Query gerencia cache e polling:
-- **Health e Connectors**: polling a cada 10s
+- **Health, Sources, Sinks**: polling a cada 10s
 - **Connector detail**: polling a cada 10s
-- **Replication**: polling a cada 10s
 
 ## Build e Deploy
 

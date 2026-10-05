@@ -296,14 +296,8 @@ function SourceCard({
                     return (
                       <tr key={table}>
                         <td className="mono">{table}</td>
-                        <td>
-                          {sink ? (
-                            <span className={`badge ${stateBadge[sink.taskState] ?? "quiet"}`} title={sink.name}>
-                              {sink.taskState}
-                            </span>
-                          ) : (
-                            <span className="badge quiet">sem sink</span>
-                          )}
+                        <td className="mono" style={{ fontSize: 11.5 }}>
+                          {sink ? sink.name : <span className="badge quiet">sem sink</span>}
                         </td>
                         <td>
                           {isSnapshotting ? (
@@ -466,13 +460,69 @@ function AddTablePanel({
   };
 
   const addMut = useMutation({
-    mutationFn: () => {
-      if (!source) return Promise.resolve();
+    mutationFn: async () => {
+      if (!source) return;
+      // 1. Update source table list
       const newTables = [...source.tables, ...selectedTables];
-      return api.connectors.update(source.name, {
+      await api.connectors.update(source.name, {
         ...source.config,
         "table.include.list": newTables.join(","),
       });
+      // 2. Create individual Iceberg sink for each new table
+      for (const table of selectedTables) {
+        const parts = table.split(".");
+        const tableName = parts.slice(1).join("_");
+        const dbPrefix = source.database === "postgres" ? "pg" : "mysql";
+        const sinkName = `iceberg-sink-${dbPrefix}-${tableName}`;
+        const topic = `${source.topicPrefix}.${table}`;
+
+        const isJson = source.config["key.converter"]?.includes("JsonConverter");
+        const sinkConfig: Record<string, string> = {
+          "connector.class": "io.tabular.iceberg.connect.IcebergSinkConnector",
+          "tasks.max": "1",
+          "topics": topic,
+          "iceberg.tables": `iceberg_db.${dbPrefix}_${tableName}`,
+          "iceberg.tables.auto-create-enabled": "true",
+          "iceberg.tables.evolve-schema-enabled": "true",
+          "iceberg.tables.default-commit-branch": "main",
+          "iceberg.control.commit.interval-ms": "60000",
+          "iceberg.control.topic": `iceberg-control-${dbPrefix}-${tableName}`,
+          "iceberg.catalog.type": "jdbc",
+          "iceberg.catalog.uri": "jdbc:postgresql://postgres:5432/iceberg_catalog",
+          "iceberg.catalog.jdbc.user": "postgres",
+          "iceberg.catalog.jdbc.password": "postgres",
+          "iceberg.catalog.warehouse": "s3a://warehouse/",
+          "iceberg.catalog.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
+          "iceberg.catalog.s3.endpoint": "http://minio:9000",
+          "iceberg.catalog.s3.path-style-access": "true",
+          "iceberg.catalog.s3.access-key-id": "minioadmin",
+          "iceberg.catalog.s3.secret-access-key": "minioadmin",
+          "iceberg.catalog.client.region": "us-east-1",
+        };
+
+        if (isJson) {
+          sinkConfig["key.converter"] = "org.apache.kafka.connect.json.JsonConverter";
+          sinkConfig["key.converter.schemas.enable"] = "false";
+          sinkConfig["value.converter"] = "org.apache.kafka.connect.json.JsonConverter";
+          sinkConfig["value.converter.schemas.enable"] = "false";
+        } else {
+          sinkConfig["key.converter"] = "io.confluent.connect.avro.AvroConverter";
+          sinkConfig["key.converter.schema.registry.url"] = "http://redpanda:8081";
+          sinkConfig["value.converter"] = "io.confluent.connect.avro.AvroConverter";
+          sinkConfig["value.converter.schema.registry.url"] = "http://redpanda:8081";
+          sinkConfig["behavior.on.null.values"] = "ignore";
+          sinkConfig["transforms"] = "unwrap";
+          sinkConfig["transforms.unwrap.type"] = "io.debezium.transforms.ExtractNewRecordState";
+          sinkConfig["transforms.unwrap.drop.tombstones"] = "true";
+          sinkConfig["transforms.unwrap.delete.handling.mode"] = "drop";
+        }
+
+        try {
+          await api.connectors.create({ name: sinkName, config: sinkConfig });
+        } catch {
+          // Sink may already exist — ignore
+        }
+      }
     },
     onSuccess: () => {
       invalidate();
@@ -492,7 +542,7 @@ function AddTablePanel({
   return (
     <div className="painel">
       <div className="painel-topo">
-        <h2>Adicionar tabelas a replicacao</h2>
+        <h2>Criar novo Sink Iceberg</h2>
         <button className="acao" onClick={onClose}>Cancelar</button>
       </div>
       <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -545,7 +595,7 @@ function AddTablePanel({
                 onClick={() => addMut.mutate()}
                 disabled={selectedTables.size === 0 || addMut.isPending}
               >
-                {addMut.isPending ? "Adicionando..." : `Adicionar ${selectedTables.size} tabela${selectedTables.size !== 1 ? "s" : ""}`}
+                {addMut.isPending ? "Criando sinks..." : `Criar ${selectedTables.size} sink${selectedTables.size !== 1 ? "s" : ""}`}
               </button>
             </div>
           </>
@@ -557,7 +607,7 @@ function AddTablePanel({
 
 // ── Pagina principal ─────────────────────────────────────────────────
 
-export function Replication() {
+export function Sinks() {
   const [showAddPanel, setShowAddPanel] = useState(false);
 
   const { data: connectors } = useQuery({
@@ -604,12 +654,12 @@ export function Replication() {
       <div className="cabecalho">
         <div>
           <div className="eyebrow">Pipeline</div>
-          <h1>Replication</h1>
-          <p>Gerencie a replicacao de cada tabela individualmente.</p>
+          <h1>Sinks</h1>
+          <p>Gerencie os sinks Iceberg e a replicacao por tabela.</p>
         </div>
         {sources.length > 0 && !showAddPanel && (
           <button className="acao primaria" onClick={() => setShowAddPanel(true)}>
-            + Adicionar tabela
+            + Novo Sink
           </button>
         )}
       </div>

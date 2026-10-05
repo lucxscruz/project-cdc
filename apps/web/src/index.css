@@ -172,6 +172,8 @@ table.densa td.mono { font-family: var(--mono); font-size: 12px; }
 .acao-icone.warn:hover { background: var(--warn-soft); }
 .acao-icone.err { color: var(--err); border-color: color-mix(in srgb, var(--err) 40%, transparent); }
 .acao-icone.err:hover { background: var(--err-soft); }
+.acao-icone.info { color: var(--info); border-color: color-mix(in srgb, var(--info) 40%, transparent); }
+.acao-icone.info:hover { background: var(--primary-soft); }
 .acao.primaria { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); }
 .acao.primaria:hover { opacity: .9; }
 .acao.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }

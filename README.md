@@ -235,13 +235,27 @@ make help
 
 ## Connectors
 
-| Connector | Tipo | Descrição |
+### Sources
+
+| Connector | Formato | Descrição |
 |---|---|---|
-| `postgres-source` | Source (Avro) | CDC do PostgreSQL para tópicos `pg.public.*` |
-| `postgres-source-iceberg` | Source (JSON) | CDC do PostgreSQL para tópicos `pg-iceberg.public.*` (flat, sem envelope) |
-| `mysql-source` | Source (Avro) | CDC do MySQL para tópicos `mysql.cdc_source.*` |
-| `iceberg-sink-postgres` | Sink (Iceberg) | Materializa tópicos PG em tabelas Iceberg (Parquet no MinIO) |
-| `iceberg-sink-mysql` | Sink (Iceberg) | Materializa tópicos MySQL em tabelas Iceberg (Parquet no MinIO) |
+| `postgres-source-iceberg` | JSON flat | CDC do PostgreSQL para tópicos `pg-iceberg.public.*` |
+| `mysql-source` | Avro | CDC do MySQL para tópicos `mysql.cdc_source.*` |
+
+### Sinks (Iceberg)
+
+Um sink individual por tabela, criado automaticamente pela aba Sinks do painel:
+
+| Connector | Tópico | Tabela Iceberg |
+|---|---|---|
+| `iceberg-sink-pg-customers` | `pg-iceberg.public.customers` | `iceberg_db.pg_customers` |
+| `iceberg-sink-pg-orders` | `pg-iceberg.public.orders` | `iceberg_db.pg_orders` |
+| `iceberg-sink-pg-products` | `pg-iceberg.public.products` | `iceberg_db.pg_products` |
+| `iceberg-sink-mysql-employees` | `mysql.cdc_source.employees` | `iceberg_db.mysql_employees` |
+| `iceberg-sink-mysql-departments` | `mysql.cdc_source.departments` | `iceberg_db.mysql_departments` |
+| `iceberg-sink-mysql-audit_log` | `mysql.cdc_source.audit_log` | `iceberg_db.mysql_audit_log` |
+
+Cada sink é isolado — falha em uma tabela não afeta as demais.
 
 ## Lakehouse (Iceberg)
 
@@ -312,9 +326,6 @@ warehouse/                          ← bucket Iceberg
     ├── pg_orders/
     └── pg_products/
 
-raw/                                ← bucket legado (JSON, S3 Sink antigo)
-└── topics/
-    └── ...
 ```
 
 ## Bancos de Dados
@@ -344,8 +355,8 @@ Conexão direta: `localhost:3307` / `root` / `root`
 O painel web (React) oferece:
 
 - **Dashboard** — KPIs dos connectors (running, paused, failed) e health dos serviços
-- **Connectors** — lista, detalhes, pause/resume/restart/delete
-- **Replication** — visão por tabela de quais estão sendo replicadas, com ações de pausar/retomar/remover/adicionar por tabela e detalhes da conexão
+- **Sources** — gerenciamento dos source connectors (Debezium), com wizard para criar novos sources
+- **Sinks** — gerenciamento dos sinks Iceberg por tabela, com ações de snapshot incremental, pausar/retomar/remover e criação de novos sinks vinculados a sources
 - **Observability** — dashboards Grafana embeddados e health check
 
 O design usa tema escuro, CSS custom properties e tipografia Geist.

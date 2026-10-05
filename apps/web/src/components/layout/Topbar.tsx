@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 
 const pageNames: Record<string, string> = {
   "/": "Dashboard",
-  "/connectors": "Connectors",
-  "/connectors/new": "Novo Connector",
-  "/replication": "Replication",
+  "/sources": "Sources",
+  "/sources/new": "Novo Source",
+  "/sinks": "Sinks",
   "/observability": "Observability",
 };
 

@@ -41,8 +41,16 @@ CREATE TABLE products (
     category VARCHAR(100)
 );
 
+-- Signal table for Debezium incremental snapshots
+CREATE TABLE debezium_signal (
+    id VARCHAR(42) PRIMARY KEY,
+    type VARCHAR(32) NOT NULL,
+    data VARCHAR(2048) NULL
+);
+
 -- Grant table permissions to debezium
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO debezium;
+GRANT INSERT ON debezium_signal TO debezium;
 
 -- Create publication for Debezium
 CREATE PUBLICATION debezium_publication FOR ALL TABLES;
