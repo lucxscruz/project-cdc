@@ -5,6 +5,7 @@ import { healthRoutes } from "./routes/health.js";
 import { connectorRoutes } from "./routes/connectors.js";
 import { databaseRoutes } from "./routes/databases.js";
 import { templateRoutes } from "./routes/templates.js";
+import { lakehouseRoutes } from "./routes/lakehouse.js";
 import { metricsPlugin } from "./plugins/metrics.js";
 import { createHealthChecker } from "./services/health-checker.js";
 import { createKafkaConnectClient } from "./services/kafka-connect-client.js";
@@ -37,6 +38,7 @@ export async function buildApp() {
   await app.register(connectorRoutes, { prefix: "/api/connectors" });
   await app.register(databaseRoutes, { prefix: "/api/databases" });
   await app.register(templateRoutes, { prefix: "/api/templates" });
+  await app.register(lakehouseRoutes, { prefix: "/api/lakehouse" });
 
   return app;
 }
