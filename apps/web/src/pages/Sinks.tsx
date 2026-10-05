@@ -481,7 +481,7 @@ function AddTablePanel({
           "connector.class": "io.tabular.iceberg.connect.IcebergSinkConnector",
           "tasks.max": "1",
           "topics": topic,
-          "iceberg.tables": `iceberg_db.${dbPrefix}_${tableName}`,
+          "iceberg.tables": `bronze.${dbPrefix}_${tableName}`,
           "iceberg.tables.auto-create-enabled": "true",
           "iceberg.tables.evolve-schema-enabled": "true",
           "iceberg.tables.default-commit-branch": "main",

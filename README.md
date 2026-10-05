@@ -248,12 +248,12 @@ Um sink individual por tabela, criado automaticamente pela aba Sinks do painel:
 
 | Connector | Tópico | Tabela Iceberg |
 |---|---|---|
-| `iceberg-sink-pg-customers` | `pg-iceberg.public.customers` | `iceberg_db.pg_customers` |
-| `iceberg-sink-pg-orders` | `pg-iceberg.public.orders` | `iceberg_db.pg_orders` |
-| `iceberg-sink-pg-products` | `pg-iceberg.public.products` | `iceberg_db.pg_products` |
-| `iceberg-sink-mysql-employees` | `mysql.cdc_source.employees` | `iceberg_db.mysql_employees` |
-| `iceberg-sink-mysql-departments` | `mysql.cdc_source.departments` | `iceberg_db.mysql_departments` |
-| `iceberg-sink-mysql-audit_log` | `mysql.cdc_source.audit_log` | `iceberg_db.mysql_audit_log` |
+| `iceberg-sink-pg-customers` | `pg-iceberg.public.customers` | `bronze.pg_customers` |
+| `iceberg-sink-pg-orders` | `pg-iceberg.public.orders` | `bronze.pg_orders` |
+| `iceberg-sink-pg-products` | `pg-iceberg.public.products` | `bronze.pg_products` |
+| `iceberg-sink-mysql-employees` | `mysql.cdc_source.employees` | `bronze.mysql_employees` |
+| `iceberg-sink-mysql-departments` | `mysql.cdc_source.departments` | `bronze.mysql_departments` |
+| `iceberg-sink-mysql-audit_log` | `mysql.cdc_source.audit_log` | `bronze.mysql_audit_log` |
 
 Cada sink é isolado — falha em uma tabela não afeta as demais.
 
@@ -265,12 +265,12 @@ As tabelas Iceberg são criadas automaticamente pelo sink connector e ficam aces
 
 ```sql
 -- Listar tabelas
-SHOW TABLES FROM iceberg.iceberg_db;
+SHOW TABLES FROM iceberg.bronze;
 
 -- Consultar dados do CDC
-SELECT * FROM iceberg.iceberg_db.pg_customers;
-SELECT * FROM iceberg.iceberg_db.pg_orders;
-SELECT * FROM iceberg.iceberg_db.pg_products;
+SELECT * FROM iceberg.bronze.pg_customers;
+SELECT * FROM iceberg.bronze.pg_orders;
+SELECT * FROM iceberg.bronze.pg_products;
 ```
 
 ### Consultas federadas (via Trino)
@@ -290,7 +290,7 @@ FROM postgres.public.customers c
 JOIN mysql.cdc_source.employees e ON c.id = e.id;
 
 -- Dados do lakehouse — Bronze (histórico completo)
-SELECT * FROM iceberg.iceberg_db.pg_customers;
+SELECT * FROM iceberg.bronze.pg_customers;
 
 -- Dados do lakehouse — Silver (estado atual, sem deletados)
 SELECT * FROM iceberg.silver.pg_customers;
@@ -308,7 +308,7 @@ SELECT * FROM iceberg.silver.pg_customers;
 
 | Schema | Conteúdo |
 |---|---|
-| `iceberg.iceberg_db` | **Bronze** — todos os eventos CDC (append-only, inclui deletados com `__deleted=true`) |
+| `iceberg.bronze` | **Bronze** — todos os eventos CDC (append-only, inclui deletados com `__deleted=true`) |
 | `iceberg.silver` | **Silver** — estado atual (deduplicado por PK, sem deletados) |
 
 As views Silver são geradas automaticamente via `POST /api/lakehouse/silver/generate-all`.
@@ -326,7 +326,7 @@ Com `iceberg.tables.evolve-schema-enabled=true`, quando uma coluna é adicionada
 
 ```
 warehouse/                          ← bucket Iceberg
-└── iceberg_db/
+└── bronze/
     ├── pg_customers/
     │   ├── data/
     │   │   ├── 00001-....parquet   ← dados columnar

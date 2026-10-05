@@ -83,12 +83,12 @@ Os dados do CDC são materializados em tabelas Apache Iceberg no MinIO, usando o
 
 | Sink | Tópico | Tabela Iceberg | Converter |
 |---|---|---|---|
-| `iceberg-sink-pg-customers` | `pg-iceberg.public.customers` | `iceberg_db.pg_customers` | JSON |
-| `iceberg-sink-pg-orders` | `pg-iceberg.public.orders` | `iceberg_db.pg_orders` | JSON |
-| `iceberg-sink-pg-products` | `pg-iceberg.public.products` | `iceberg_db.pg_products` | JSON |
-| `iceberg-sink-mysql-employees` | `mysql.cdc_source.employees` | `iceberg_db.mysql_employees` | Avro |
-| `iceberg-sink-mysql-departments` | `mysql.cdc_source.departments` | `iceberg_db.mysql_departments` | Avro |
-| `iceberg-sink-mysql-audit_log` | `mysql.cdc_source.audit_log` | `iceberg_db.mysql_audit_log` | Avro |
+| `iceberg-sink-pg-customers` | `pg-iceberg.public.customers` | `bronze.pg_customers` | JSON |
+| `iceberg-sink-pg-orders` | `pg-iceberg.public.orders` | `bronze.pg_orders` | JSON |
+| `iceberg-sink-pg-products` | `pg-iceberg.public.products` | `bronze.pg_products` | JSON |
+| `iceberg-sink-mysql-employees` | `mysql.cdc_source.employees` | `bronze.mysql_employees` | Avro |
+| `iceberg-sink-mysql-departments` | `mysql.cdc_source.departments` | `bronze.mysql_departments` | Avro |
+| `iceberg-sink-mysql-audit_log` | `mysql.cdc_source.audit_log` | `bronze.mysql_audit_log` | Avro |
 
 Novos sinks são criados pela aba **Sinks** do painel web, que gera a config Iceberg automaticamente vinculada ao source selecionado.
 
@@ -107,7 +107,7 @@ O metadata das tabelas Iceberg (schemas, snapshots, manifest files) é armazenad
 
 ```
 warehouse/
-  iceberg_db/
+  bronze/
     pg_customers/
       data/
         00001-....parquet         ← dados columnar
@@ -155,7 +155,7 @@ Cada view Silver aplica:
 2. `WHERE __deleted IS NULL OR __deleted != 'true'` — filtra registros deletados
 
 ```
-Bronze (iceberg.iceberg_db.pg_customers):
+Bronze (iceberg.bronze.pg_customers):
   id=57, name="Test", __deleted="false", __op="c"   ← INSERT
   id=57, name="",     __deleted="true",  __op="d"   ← DELETE
   id=58, name="Ana",  __deleted="false", __op="c"   ← INSERT
@@ -168,7 +168,7 @@ Consulta no Superset/Trino:
 
 ```sql
 -- Bronze (histórico completo)
-SELECT * FROM iceberg.iceberg_db.pg_customers;
+SELECT * FROM iceberg.bronze.pg_customers;
 
 -- Silver (estado atual)
 SELECT * FROM iceberg.silver.pg_customers;

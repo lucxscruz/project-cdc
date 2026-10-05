@@ -116,7 +116,7 @@ describe("Pipeline CDC — PostgreSQL", () => {
     const result = await listMinioObjects(
       minio,
       "warehouse",
-      "iceberg_db/pg_customers/",
+      "bronze/pg_customers/",
     );
 
     expect(result.Contents).toBeDefined();
@@ -127,7 +127,7 @@ describe("Pipeline CDC — PostgreSQL", () => {
     const res = await fetch(`${TRINO_URL}/v1/statement`, {
       method: "POST",
       headers: { "X-Trino-User": "test" },
-      body: "SHOW TABLES FROM iceberg.iceberg_db",
+      body: "SHOW TABLES FROM iceberg.bronze",
     });
 
     expect(res.status).toBe(200);

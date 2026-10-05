@@ -66,7 +66,7 @@ describe("Pipeline CDC — MySQL", () => {
     const result = await listMinioObjects(
       minio,
       "warehouse",
-      "iceberg_db/mysql_employees/",
+      "bronze/mysql_employees/",
     );
 
     expect(result.Contents).toBeDefined();

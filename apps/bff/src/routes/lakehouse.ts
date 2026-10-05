@@ -6,7 +6,7 @@ const CDC_META_COLUMNS = new Set(["__deleted", "__op", "__source_ts_ms"]);
 async function trinoQuery(sql: string): Promise<any[]> {
   const submitRes = await fetch(`${TRINO_URL}/v1/statement`, {
     method: "POST",
-    headers: { "X-Trino-User": "bff", "X-Trino-Catalog": "iceberg", "X-Trino-Schema": "iceberg_db" },
+    headers: { "X-Trino-User": "bff", "X-Trino-Catalog": "iceberg", "X-Trino-Schema": "bronze" },
     body: sql,
   });
   let result = await submitRes.json();
@@ -60,7 +60,7 @@ function buildSilverViewSQL(
       SELECT
         *,
         ROW_NUMBER() OVER (PARTITION BY ${pk} ORDER BY ${orderCol} DESC) AS __rn
-      FROM iceberg.iceberg_db.${table}
+      FROM iceberg.bronze.${table}
     )
     WHERE __rn = 1 ${deleteFilter}
   `;
@@ -91,12 +91,12 @@ export async function lakehouseRoutes(app: FastifyInstance) {
     try {
       await trinoExecute("CREATE SCHEMA IF NOT EXISTS iceberg.silver");
 
-      const columns = await trinoQuery(`SHOW COLUMNS FROM iceberg.iceberg_db.${table}`);
+      const columns = await trinoQuery(`SHOW COLUMNS FROM iceberg.bronze.${table}`);
       const colNames = columns.map((r: any[]) => r[0]);
 
       await trinoExecute(buildSilverViewSQL(table, colNames, pk));
 
-      return { view: `iceberg.silver.${table}`, source: `iceberg.iceberg_db.${table}`, idColumn: pk };
+      return { view: `iceberg.silver.${table}`, source: `iceberg.bronze.${table}`, idColumn: pk };
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
     }
@@ -107,14 +107,14 @@ export async function lakehouseRoutes(app: FastifyInstance) {
     try {
       await trinoExecute("CREATE SCHEMA IF NOT EXISTS iceberg.silver");
 
-      const tables = await trinoQuery("SHOW TABLES FROM iceberg.iceberg_db");
+      const tables = await trinoQuery("SHOW TABLES FROM iceberg.bronze");
       const tableNames = tables.map((r: any[]) => r[0]);
 
       const results: Array<{ table: string; view: string; status: string }> = [];
 
       for (const table of tableNames) {
         try {
-          const columns = await trinoQuery(`SHOW COLUMNS FROM iceberg.iceberg_db.${table}`);
+          const columns = await trinoQuery(`SHOW COLUMNS FROM iceberg.bronze.${table}`);
           const colNames = columns.map((r: any[]) => r[0]);
           const pk = colNames.includes("id") ? "id" : colNames[0];
 
