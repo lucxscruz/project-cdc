@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 
 const TRINO_URL = process.env.TRINO_URL ?? "http://trino:8085";
+const CDC_META_COLUMNS = new Set(["__deleted", "__op", "__source_ts_ms"]);
 
 async function trinoQuery(sql: string): Promise<any[]> {
   const submitRes = await fetch(`${TRINO_URL}/v1/statement`, {
@@ -11,7 +12,6 @@ async function trinoQuery(sql: string): Promise<any[]> {
   let result = await submitRes.json();
   const allData: any[] = [];
 
-  // Accumulate data across poll responses
   if (result.data) allData.push(...result.data);
 
   while (result.nextUri) {
@@ -35,6 +35,37 @@ async function trinoExecute(sql: string): Promise<void> {
   await trinoQuery(sql);
 }
 
+function buildSilverViewSQL(
+  table: string,
+  colNames: string[],
+  pk: string,
+): string {
+  const hasTs = colNames.includes("__source_ts_ms");
+  const hasDeleted = colNames.includes("__deleted");
+  const orderCol = hasTs ? "__source_ts_ms" : pk;
+
+  // Only include original table columns (exclude CDC metadata)
+  const cleanColumns = colNames
+    .filter((c) => !CDC_META_COLUMNS.has(c))
+    .map((c) => `"${c}"`)
+    .join(", ");
+
+  const deleteFilter = hasDeleted
+    ? "AND (__deleted IS NULL OR __deleted != 'true')"
+    : "";
+
+  return `
+    CREATE OR REPLACE VIEW iceberg.silver.${table} AS
+    SELECT ${cleanColumns} FROM (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (PARTITION BY ${pk} ORDER BY ${orderCol} DESC) AS __rn
+      FROM iceberg.iceberg_db.${table}
+    )
+    WHERE __rn = 1 ${deleteFilter}
+  `;
+}
+
 export async function lakehouseRoutes(app: FastifyInstance) {
   // List all Silver views
   app.get("/silver", async () => {
@@ -56,34 +87,16 @@ export async function lakehouseRoutes(app: FastifyInstance) {
     }
 
     const pk = idColumn ?? "id";
-    const silverView = table; // same name in silver schema
 
     try {
-      // Ensure silver schema exists
       await trinoExecute("CREATE SCHEMA IF NOT EXISTS iceberg.silver");
 
       const columns = await trinoQuery(`SHOW COLUMNS FROM iceberg.iceberg_db.${table}`);
       const colNames = columns.map((r: any[]) => r[0]);
-      const hasTs = colNames.includes("__source_ts_ms");
-      const hasDeleted = colNames.includes("__deleted");
-      const orderCol = hasTs ? "__source_ts_ms" : pk;
 
-      const whereClause = hasDeleted
-        ? "WHERE __rn = 1 AND (__deleted IS NULL OR __deleted != 'true')"
-        : "WHERE __rn = 1";
+      await trinoExecute(buildSilverViewSQL(table, colNames, pk));
 
-      await trinoExecute(`
-        CREATE OR REPLACE VIEW iceberg.silver.${silverView} AS
-        SELECT * FROM (
-          SELECT
-            *,
-            ROW_NUMBER() OVER (PARTITION BY ${pk} ORDER BY ${orderCol} DESC) AS __rn
-          FROM iceberg.iceberg_db.${table}
-        )
-        ${whereClause}
-      `);
-
-      return { view: `iceberg.silver.${silverView}`, source: `iceberg.iceberg_db.${table}`, idColumn: pk };
+      return { view: `iceberg.silver.${table}`, source: `iceberg.iceberg_db.${table}`, idColumn: pk };
     } catch (err: any) {
       return reply.status(500).send({ error: err.message });
     }
@@ -94,7 +107,6 @@ export async function lakehouseRoutes(app: FastifyInstance) {
     try {
       await trinoExecute("CREATE SCHEMA IF NOT EXISTS iceberg.silver");
 
-      // List all Bronze tables
       const tables = await trinoQuery("SHOW TABLES FROM iceberg.iceberg_db");
       const tableNames = tables.map((r: any[]) => r[0]);
 
@@ -105,24 +117,8 @@ export async function lakehouseRoutes(app: FastifyInstance) {
           const columns = await trinoQuery(`SHOW COLUMNS FROM iceberg.iceberg_db.${table}`);
           const colNames = columns.map((r: any[]) => r[0]);
           const pk = colNames.includes("id") ? "id" : colNames[0];
-          const hasTs = colNames.includes("__source_ts_ms");
-          const hasDeleted = colNames.includes("__deleted");
-          const orderCol = hasTs ? "__source_ts_ms" : pk;
 
-          const whereClause = hasDeleted
-            ? "WHERE __rn = 1 AND (__deleted IS NULL OR __deleted != 'true')"
-            : "WHERE __rn = 1";
-
-          await trinoExecute(`
-            CREATE OR REPLACE VIEW iceberg.silver.${table} AS
-            SELECT * FROM (
-              SELECT
-                *,
-                ROW_NUMBER() OVER (PARTITION BY ${pk} ORDER BY ${orderCol} DESC) AS __rn
-              FROM iceberg.iceberg_db.${table}
-            )
-            ${whereClause}
-          `);
+          await trinoExecute(buildSilverViewSQL(table, colNames, pk));
 
           results.push({ table, view: `iceberg.silver.${table}`, status: "ok" });
         } catch (err: any) {
