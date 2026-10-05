@@ -71,6 +71,18 @@ export const api = {
       ),
   },
 
+  lakehouse: {
+    generateSilver: (table: string, idColumn?: string) =>
+      request<{ view: string }>("/lakehouse/silver/generate", {
+        method: "POST",
+        body: JSON.stringify({ table, idColumn }),
+      }),
+    generateAllSilver: () =>
+      request<Array<{ table: string; view: string; status: string }>>("/lakehouse/silver/generate-all", {
+        method: "POST",
+      }),
+  },
+
   templates: {
     list: () => request<Array<{ id: string; name: string; type: string }>>("/templates"),
     generate: (body: {

@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 
 const TRINO_URL = process.env.TRINO_URL ?? "http://trino:8085";
+const KAFKA_CONNECT_URL = process.env.KAFKA_CONNECT_URL ?? "http://kafka-connect:8083";
 const CDC_META_COLUMNS = new Set(["__deleted", "__op", "__source_ts_ms"]);
 
 async function trinoQuery(sql: string): Promise<any[]> {
@@ -112,11 +113,26 @@ export async function lakehouseRoutes(app: FastifyInstance) {
 
       const results: Array<{ table: string; view: string; status: string }> = [];
 
+      // Load PK from sink connector configs
+      const sinkPkMap = new Map<string, string>();
+      try {
+        const connectRes = await fetch(`${KAFKA_CONNECT_URL}/connectors`);
+        const connectorNames: string[] = await connectRes.json();
+        for (const name of connectorNames.filter((n) => n.startsWith("iceberg-sink-"))) {
+          const cfgRes = await fetch(`${KAFKA_CONNECT_URL}/connectors/${name}/config`);
+          const cfg = await cfgRes.json();
+          if (cfg["cdc.primary.key"] && cfg["iceberg.tables"]) {
+            const bronzeTable = cfg["iceberg.tables"].replace("bronze.", "");
+            sinkPkMap.set(bronzeTable, cfg["cdc.primary.key"]);
+          }
+        }
+      } catch { /* ignore — will fallback to id */ }
+
       for (const table of tableNames) {
         try {
           const columns = await trinoQuery(`SHOW COLUMNS FROM iceberg.bronze.${table}`);
           const colNames = columns.map((r: any[]) => r[0]);
-          const pk = colNames.includes("id") ? "id" : colNames[0];
+          const pk = sinkPkMap.get(table) ?? (colNames.includes("id") ? "id" : colNames[0]);
 
           await trinoExecute(buildSilverViewSQL(table, colNames, pk));
 

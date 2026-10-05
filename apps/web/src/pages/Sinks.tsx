@@ -444,8 +444,11 @@ function AddTablePanel({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const [step, setStep] = useState<"tables" | "pk">("tables");
   const [selectedSource, setSelectedSource] = useState(sources[0]?.name ?? "");
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
+  const [pkMap, setPkMap] = useState<Record<string, string>>({});
+  const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
 
   const source = sources.find((s) => s.name === selectedSource);
   const dbTables = source ? (tablesByDb.get(source.database) ?? []) : [];
@@ -459,22 +462,43 @@ function AddTablePanel({
     queryClient.invalidateQueries({ queryKey: ["connector-details"] });
   };
 
+  // Load columns for selected tables when moving to PK step
+  const loadColumns = async () => {
+    if (!source) return;
+    const cols: Record<string, string[]> = {};
+    const defaults: Record<string, string> = {};
+    for (const table of selectedTables) {
+      const tableName = table.split(".").pop() ?? "";
+      try {
+        const columns = await api.databases.columns(source.database, tableName);
+        cols[table] = columns.map((c) => c.name);
+        const pkCol = columns.find((c) => c.isPrimaryKey);
+        defaults[table] = pkCol?.name ?? columns[0]?.name ?? "id";
+      } catch {
+        cols[table] = ["id"];
+        defaults[table] = "id";
+      }
+    }
+    setTableColumns(cols);
+    setPkMap(defaults);
+    setStep("pk");
+  };
+
   const addMut = useMutation({
     mutationFn: async () => {
       if (!source) return;
-      // 1. Update source table list
       const newTables = [...source.tables, ...selectedTables];
       await api.connectors.update(source.name, {
         ...source.config,
         "table.include.list": newTables.join(","),
       });
-      // 2. Create individual Iceberg sink for each new table
       for (const table of selectedTables) {
         const parts = table.split(".");
         const tableName = parts.slice(1).join("_");
         const dbPrefix = source.database === "postgres" ? "pg" : "mysql";
         const sinkName = `iceberg-sink-${dbPrefix}-${tableName}`;
         const topic = `${source.topicPrefix}.${table}`;
+        const pk = pkMap[table] ?? "id";
 
         const isJson = source.config["key.converter"]?.includes("JsonConverter");
         const sinkConfig: Record<string, string> = {
@@ -498,6 +522,7 @@ function AddTablePanel({
           "iceberg.catalog.s3.access-key-id": "minioadmin",
           "iceberg.catalog.s3.secret-access-key": "minioadmin",
           "iceberg.catalog.client.region": "us-east-1",
+          "cdc.primary.key": pk,
         };
 
         if (isJson) {
@@ -514,15 +539,19 @@ function AddTablePanel({
           sinkConfig["transforms"] = "unwrap";
           sinkConfig["transforms.unwrap.type"] = "io.debezium.transforms.ExtractNewRecordState";
           sinkConfig["transforms.unwrap.drop.tombstones"] = "true";
-          sinkConfig["transforms.unwrap.delete.handling.mode"] = "drop";
+          sinkConfig["transforms.unwrap.delete.handling.mode"] = "rewrite";
+          sinkConfig["transforms.unwrap.add.fields"] = "op,source.ts_ms";
         }
 
         try {
           await api.connectors.create({ name: sinkName, config: sinkConfig });
         } catch {
-          // Sink may already exist — ignore
+          // Sink may already exist
         }
       }
+
+      // Generate Silver views (best-effort for tables that already have Bronze data)
+      try { await api.lakehouse.generateAllSilver(); } catch { /* ignore */ }
     },
     onSuccess: () => {
       invalidate();
@@ -539,6 +568,8 @@ function AddTablePanel({
     });
   };
 
+  const allPksDefined = [...selectedTables].every((t) => pkMap[t]?.trim());
+
   return (
     <div className="painel">
       <div className="painel-topo">
@@ -550,7 +581,7 @@ function AddTablePanel({
           <label>Source connector</label>
           <select
             value={selectedSource}
-            onChange={(e) => { setSelectedSource(e.target.value); setSelectedTables(new Set()); }}
+            onChange={(e) => { setSelectedSource(e.target.value); setSelectedTables(new Set()); setStep("tables"); }}
           >
             {sources.map((s) => (
               <option key={s.name} value={s.name}>{s.name} ({s.database})</option>
@@ -563,11 +594,11 @@ function AddTablePanel({
             <b>Todas as tabelas ja estao sendo replicadas</b>
             <p>Nao ha tabelas disponiveis para adicionar neste source.</p>
           </div>
-        ) : (
+        ) : step === "tables" ? (
           <>
             <div>
               <span style={{ fontFamily: "var(--mono)", fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--quiet)" }}>
-                Selecione as tabelas ({selectedTables.size} de {available.length})
+                1. Selecione as tabelas ({selectedTables.size} de {available.length})
               </span>
             </div>
             <div className="selector">
@@ -592,8 +623,42 @@ function AddTablePanel({
               <button className="acao" onClick={onClose}>Cancelar</button>
               <button
                 className="acao primaria"
+                onClick={loadColumns}
+                disabled={selectedTables.size === 0}
+              >
+                Proximo
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <span style={{ fontFamily: "var(--mono)", fontSize: 10.5, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--quiet)" }}>
+                2. Defina a chave primaria de cada tabela
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[...selectedTables].map((table) => (
+                <div key={table} className="campo">
+                  <label>{table}</label>
+                  <select
+                    value={pkMap[table] ?? ""}
+                    onChange={(e) => setPkMap((prev) => ({ ...prev, [table]: e.target.value }))}
+                  >
+                    {(tableColumns[table] ?? []).map((col) => (
+                      <option key={col} value={col}>{col}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="acao" onClick={() => setStep("tables")}>Voltar</button>
+              <button
+                className="acao primaria"
                 onClick={() => addMut.mutate()}
-                disabled={selectedTables.size === 0 || addMut.isPending}
+                disabled={!allPksDefined || addMut.isPending}
               >
                 {addMut.isPending ? "Criando sinks..." : `Criar ${selectedTables.size} sink${selectedTables.size !== 1 ? "s" : ""}`}
               </button>

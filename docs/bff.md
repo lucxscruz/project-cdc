@@ -132,7 +132,9 @@ Todas as variáveis têm defaults para rodar dentro do Docker Compose:
 | POST | `/api/lakehouse/silver/generate` | Gera view Silver para uma tabela Bronze. Body: `{ table, idColumn? }` |
 | POST | `/api/lakehouse/silver/generate-all` | Gera views Silver para todas as tabelas Bronze automaticamente |
 
-O `generate-all` detecta a PK e os campos disponíveis (`__source_ts_ms`, `__deleted`) de cada tabela e cria a view correspondente no schema `iceberg.silver`. Comunica com o Trino via REST API (`TRINO_URL`).
+O `generate-all` lê a PK de cada tabela a partir da propriedade `cdc.primary.key` salva no config do sink connector (definida pelo usuario ao criar o sink no painel). Se nao encontrar, faz fallback para coluna `id` ou primeira coluna. Detecta campos `__source_ts_ms` e `__deleted` para ordenacao e filtragem. Comunica com o Trino via REST API (`TRINO_URL`).
+
+O endpoint `POST /:name/snapshot` agenda automaticamente um `generate-all` apos 70s, garantindo que a Silver seja criada apos o primeiro commit Iceberg.
 
 ## Services
 

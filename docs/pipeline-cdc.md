@@ -147,34 +147,54 @@ Isso permite que a camada Bronze mantenha o histórico completo de todas as oper
 
 ### Camada Silver (estado atual)
 
-A camada Bronze (Iceberg) armazena todos os eventos CDC em modo append-only. Para obter o **estado atual** (equivalente ao banco de origem), views Silver são criadas automaticamente via `POST /api/lakehouse/silver/generate-all`.
+A camada Bronze (Iceberg) armazena todos os eventos CDC em modo append-only. Para obter o **estado atual** (equivalente ao banco de origem), views Silver são criadas automaticamente.
+
+### Quando a Silver é gerada
+
+- **Ao criar um sink** no painel — `generate-all` roda (best-effort, tabela pode nao existir ainda)
+- **Ao triggar snapshot incremental** (botao ↻) — `generate-all` e agendado apos 70s (tempo do commit Iceberg)
+- **Manualmente** — via `POST /api/lakehouse/silver/generate-all`
+
+### Definicao da PK
+
+Ao criar um sink no painel, o usuario define a **chave primaria** de cada tabela. Essa PK e salva no config do sink como `cdc.primary.key` e usada para:
+
+- **Deduplicacao na Silver** — `ROW_NUMBER() OVER (PARTITION BY pk ORDER BY __source_ts_ms DESC)`
+- **Snapshot incremental** — o Debezium usa a PK para ler dados em chunks
+
+### Como a Silver funciona
 
 Cada view Silver aplica:
 
-1. `ROW_NUMBER() OVER (PARTITION BY id ORDER BY __source_ts_ms DESC)` — pega o evento mais recente por PK
+1. `ROW_NUMBER() OVER (PARTITION BY pk ORDER BY __source_ts_ms DESC)` — pega o evento mais recente por PK
 2. `WHERE __deleted IS NULL OR __deleted != 'true'` — filtra registros deletados
+3. Exclui colunas CDC (`__deleted`, `__op`, `__source_ts_ms`) — mostra apenas colunas da tabela original
 
 ```
-Bronze (iceberg.bronze.pg_customers):
-  id=57, name="Test", __deleted="false", __op="c"   ← INSERT
-  id=57, name="",     __deleted="true",  __op="d"   ← DELETE
-  id=58, name="Ana",  __deleted="false", __op="c"   ← INSERT
+Bronze (iceberg.bronze.pg_partners):
+  id=1, name="TechNova",  contract_value="250000.00", __deleted="false", __op="c"   ← INSERT
+  id=2, name="LogiPrime",  contract_value="180000.00", __deleted="false", __op="c"   ← INSERT
+  id=2, name="LogiPrime",  contract_value="500000.00", __deleted="false", __op="u"   ← UPDATE
+  id=5, name="PayStream",  contract_value="150000.00", __deleted="false", __op="c"   ← INSERT
+  id=5, name="",            contract_value=null,        __deleted="true",  __op="d"   ← DELETE
 
-Silver (iceberg.silver.pg_customers):
-  id=58, name="Ana"   ← apenas registros vivos
+Silver (iceberg.silver.pg_partners):
+  id=1, name="TechNova",  contract_value="250000.00"   ← original
+  id=2, name="LogiPrime",  contract_value="500000.00"   ← valor atualizado
+                                                         ← id=5 removido (deletado)
 ```
 
 Consulta no Superset/Trino:
 
 ```sql
--- Bronze (histórico completo)
-SELECT * FROM iceberg.bronze.pg_customers;
+-- Bronze (historico completo de todas as operacoes)
+SELECT * FROM iceberg.bronze.pg_partners;
 
--- Silver (estado atual)
-SELECT * FROM iceberg.silver.pg_customers;
+-- Silver (estado atual, igual ao banco de origem)
+SELECT * FROM iceberg.silver.pg_partners;
 ```
 
-As views são geradas automaticamente pelo BFF e podem ser regeneradas a qualquer momento sem perda de dados.
+As views podem ser regeneradas a qualquer momento via API sem perda de dados.
 
 ## Snapshot Incremental
 

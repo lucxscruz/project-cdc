@@ -72,6 +72,20 @@ export async function connectorRoutes(app: FastifyInstance) {
       await client.end();
     }
 
+    // Schedule Silver view generation after Iceberg commit (~70s)
+    const TRINO_URL = process.env.TRINO_URL ?? "http://trino:8085";
+    const KAFKA_CONNECT_URL = config.kafkaConnect.url;
+    setTimeout(async () => {
+      try {
+        const generateAll = await fetch(`http://localhost:${config.port}/api/lakehouse/silver/generate-all`, {
+          method: "POST",
+        });
+        if (!generateAll.ok) throw new Error(`HTTP ${generateAll.status}`);
+      } catch {
+        // Best-effort — Silver will be created on next generate-all call
+      }
+    }, 70000);
+
     return reply.status(202).send({ message: `Snapshot triggered for ${table}` });
   });
 }

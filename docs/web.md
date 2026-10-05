@@ -84,10 +84,17 @@ Gerencia os sinks Iceberg individualmente por tabela:
 - **Botao ⏸** (pausar): remove tabela da replicacao (estado salvo em localStorage)
 - **Botao ✕** (remover): remove permanentemente
 - **Botao ▶** (retomar): re-adiciona tabela pausada
-- **Botao "+ Novo Sink"**: seleciona source → seleciona tabelas → cria sink Iceberg individual por tabela automaticamente
+- **Botao "+ Novo Sink"**: fluxo em 2 etapas:
+  1. Seleciona source → seleciona tabelas
+  2. Define a **chave primaria (PK)** de cada tabela (dropdown com colunas reais, pre-seleciona PK se existir)
+  - Cria sink Iceberg individual por tabela com PK salva no config (`cdc.primary.key`)
+  - Gera views Silver automaticamente (best-effort)
 - **Detalhes da conexao**: toggle com host, porta, user, snapshot mode, slot, plugin, signal table
+- **Tabela `debezium_signal`** e oculta da listagem de tabelas disponiveis
 
 Cada sink Iceberg e isolado — falha em uma tabela nao afeta as demais.
+
+O snapshot incremental (↻) agenda a geracao da Silver automaticamente apos 70s (tempo do commit Iceberg).
 
 ## Comunicacao com o BFF
 

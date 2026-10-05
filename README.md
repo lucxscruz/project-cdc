@@ -311,7 +311,7 @@ SELECT * FROM iceberg.silver.pg_customers;
 | `iceberg.bronze` | **Bronze** — todos os eventos CDC (append-only, inclui deletados com `__deleted=true`) |
 | `iceberg.silver` | **Silver** — estado atual (deduplicado por PK, sem deletados) |
 
-As views Silver são geradas automaticamente via `POST /api/lakehouse/silver/generate-all`.
+As views Silver são geradas automaticamente ao triggar snapshot incremental (↻) ou via `POST /api/lakehouse/silver/generate-all`. A PK de cada tabela é definida pelo usuario ao criar o sink no painel.
 
 ### Schema Evolution
 
