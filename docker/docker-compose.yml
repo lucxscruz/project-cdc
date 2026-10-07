@@ -140,7 +140,7 @@ services:
   # STORAGE (MinIO)
   # ============================================================
   minio:
-    image: minio/minio
+    image: elestio/minio
     container_name: cdc-minio
     ports:
       - "19000:9000"
@@ -161,12 +161,10 @@ services:
       - cdc-network
 
   minio-init:
-    image: minio/mc
+    image: alpine:3
     container_name: cdc-minio-init
     entrypoint: /bin/sh
-    command: /init.sh
-    volumes:
-      - ./config/minio/init.sh:/init.sh
+    command: -c "apk add --no-cache curl > /dev/null 2>&1 && sleep 5 && curl -sf -X PUT http://minioadmin:minioadmin@minio:9000/warehouse > /dev/null 2>&1; echo 'Bucket warehouse created'"
     depends_on:
       minio:
         condition: service_healthy
